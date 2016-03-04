@@ -1,0 +1,27 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "Backend de CendraCM",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape ./test/*js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CendraCM/backend.git"
+  },
+  "author": "Agustín Moyano",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/CendraCM/backend/issues"
+  },
+  "homepage": "https://github.com/CendraCM/backend#readme",
+  "dependencies": {
+    "JSV": "^4.0.2",
+    "body-parser": "^1.15.0",
+    "express": "^4.13.4",
+    "express-session": "^1.13.0",
+    "mongo-factory": "^1.0.0",
+    "mongodb": "^2.1.7"
+  }
+}
