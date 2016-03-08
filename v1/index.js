@@ -1,7 +1,7 @@
 var mongo = require('mongo-factory');
 var oid = require('mongodb').ObjectID;
 var express = require('express');
-var config = require('/etc/nodejs-config/cendraCM');
+var config = require('/etc/nodejs-config/cendraCM').backend;
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 
 module.exports = function() {

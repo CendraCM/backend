@@ -1,6 +1,6 @@
 var express = require('express');
 var app = express();
-var config = require('/etc/nodejs-config/cendraCM');
+var config = require('/etc/nodejs-config/cendraCM').backend;
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
