@@ -11,6 +11,22 @@ module.exports = function() {
     var dc = db.collection('documents');
     var sc = db.collection('schemas');
 
+    version.get('/schema', function(req, res, next) {
+      sc.find(req.query).toArray(function(err, schs) {
+        if(err) return res.status(500).send(err);
+        res.json(schs);
+      });
+    });
+    version.post('/schema', function(req, res, next) {
+      sc.insertOne(req.body)
+      .then(function(inserted) {
+        res.send(inserted.insertedId);
+      })
+      .catch(function(err) {
+        res.status(500).send(err);
+      });
+    });
+
     version.get('/', function(req, res, next) {
       dc.find(req.query).toArray(function(err, docs) {
         if(err) return res.status(500).send(err);
