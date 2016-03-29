@@ -74,6 +74,8 @@ module.exports = function() {
         return schs.reduce(function(memo, item) {
           return new Promise(function(resolve, reject) {
             if(!compatibleSchema(memo, item)) return reject('Esquemas no compatibles');
+            !memo.objInsterface && (memo.objInsterface=[]);
+            memo.objInsterface.push(item._id);
             resolve(extend(true, memo, item));
           });
         }, {});
@@ -135,6 +137,7 @@ module.exports = function() {
       });
     });
     version.put('/:id', function(req, res, next) {
+      if(req.body._id) delete req.body._id;
       dc.updateOne({"_id": new oid(req.params.id)}, {$set: req.body}).then(function(updated) {
         res.send(updated.upsertedId);
       })
