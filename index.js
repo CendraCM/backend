@@ -4,8 +4,11 @@ var config = require('/etc/nodejs-config/cendraCM').backend;
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
+var fs = require('fs');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
-
+if(process.env.NODE_ENV == 'ci-testing') {
+  url += '-ci-testing';
+}
 mongo.getConnection(url)
 .then(function(db) {
   app.get('/test', function(req, res, next) {
@@ -35,7 +38,18 @@ mongo.getConnection(url)
     res.status(err.status).send(err.message);
   });
 
-  app.listen(config.port);
+  if(process.env.NODE_ENV != 'ci-testing') {
+    app.listen('/run/service/service.sock');
+    process.on('exit', function(){
+      try {
+        fs.unlinkSync('/run/service/service.sock');
+      }catch(e) {
+
+      }
+    });
+  } else {
+    module.exports = {app: app, db: db};
+  }
 })
 .catch(function(err) {
   console.log('Could not connect to Mongo');
