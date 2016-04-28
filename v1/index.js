@@ -23,69 +23,7 @@ module.exports = function() {
         if(!err && sch) {
           return resolve(sch._id);
         } else if(!err) {
-          return sc.insertOne({
-            type: 'object',
-            objName: 'BaseDocumentClass',
-            objSecurity: {
-              inmutable: true,
-              acl: {
-                "group:public": {
-                  write: false,
-                  properties: {
-                    "properties:all": false
-                  }
-                }
-              }
-            },
-            properties: {
-              objName: {type: 'string'},
-              objDescription: {
-                type: ['string', 'object'],
-                patternProperies: {
-                  '^\w\w(-\w\w)?$': {type: 'string'}
-                }
-              },
-              objInterface: {
-                type: 'array',
-                items: {
-                  type: 'string'
-                },
-                minItems: 1
-              },
-              objSecurity: {
-                type: 'object',
-                properties: {
-                  inmutable: {type: 'boolean'},
-                  locked: {
-                    type: 'object',
-                    properties: {
-                      date: {type: 'string', format: 'date-time'},
-                      user: {type: 'string'}
-                    },
-                    required: ['date', 'user']
-                  },
-                  acl: {
-                    type: 'object',
-                    patternProperies: {
-                      '^.+$': {
-                        type: 'object',
-                        properties: {
-                          write: {type: 'boolean', default: false},
-                          properties: {
-                            type: 'object',
-                            patternProperies: {
-                              '^.+$': {type: 'boolean', default: false}
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            required: ['objName', 'objSecurity']
-          })
+          return sc.insertOne(require('./documentClass'), {checkKeys: false})
           .then(function(inserted) {
             resolve(inserted.insertedId);
           })
@@ -109,7 +47,7 @@ module.exports = function() {
           if(sch1.type != sch2.type) return false;
           if(sch1.type == 'object') {
             for(var i in sch1.properties) {
-              if(sch2.hasOwnProperty(i) && !compatibleSchema(sch1.properties[i], sch2.properties[i])) return false;
+              if(sch2.properties.hasOwnProperty(i) && !compatibleSchema(sch1.properties[i], sch2.properties[i])) return false;
             }
           }
           if(sch1.type == 'array') {
@@ -154,14 +92,20 @@ module.exports = function() {
           });
         })
         .then(function(schs) {
-          return schs.reduce(function(memo, item) {
-            return new Promise(function(resolve, reject) {
-              if(!compatibleSchema(memo, item)) return reject('Esquemas no compatibles');
-              !memo.objInterface && (memo.objInterface=[]);
-              memo.objInterface.push(item._id);
-              resolve(extend(true, memo, item));
-            });
-          }, {});
+          return new Promise(function(resolve, reject) {
+            try {
+              var schemas = schs.reduce(function(memo, item) {
+                if(!compatibleSchema(memo, item)) throw 'Incompatible Schemas';
+                !memo.objInterface && (memo.objInterface=[]);
+                memo.objInterface.push(item._id);
+                return extend(true, memo, item);
+              }, {});
+              resolve(schemas);
+            } catch(error) {
+              return reject(error);
+            }
+
+          });
         })
 
       }
@@ -173,7 +117,11 @@ module.exports = function() {
         });
       });
       version.get('/schema/reduce', function(req, res, next) {
-        reduceSchema(req.body)
+        var schemas = req.query.schemas.map(function(schemaID) {
+          return new oid(schemaID);
+        });
+        schemas.unshift(baseDocumentID);
+        reduceSchema(schemas)
         .then(function(sch) {
           res.json(sch);
         })
@@ -182,8 +130,11 @@ module.exports = function() {
         })
       });
       version.post('/schema', function(req, res, next) {
-        var objInterface = req.body.objInterface || [];
-        reduceSchema(objInterface.unshift(baseDocumentID))
+        var objInterface = (req.body.objInterface || []).map(function(schemaID) {
+          return new oid(schemaID);
+        });
+        objInterface.unshift(baseDocumentID);
+        reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);
           if(report.errors.length) {
@@ -212,8 +163,11 @@ module.exports = function() {
         });
       });
       version.post('/', function(req, res, next) {
-        var objInterface = req.body.objInterface || [];
-        reduceSchema(objInterface.unshift(baseDocumentID))
+        var objInterface = (req.body.objInterface || []).map(function(schemaID) {
+          return new oid(schemaID);
+        });
+        objInterface.unshift(baseDocumentID);
+        reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);
           if(report.errors.length) {
@@ -232,10 +186,11 @@ module.exports = function() {
       version.get('/:id', function(req, res, next) {
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           if(err) return res.status(500).send(err);
+          if(!doc) return res.status(404).send('Document Not Found');
           res.json(doc);
         });
       });
-      version.put('/:id', function(req, res, next) {
+      version.put('/:id/part', function(req, res, next) {
         if(req.body._id) delete req.body._id;
         /**** primero habría que hacer un update en una transacción y al documento resultante ver si valida o no****/
         /*var objInterface = req.body.objInterface || [];
@@ -263,10 +218,13 @@ module.exports = function() {
         });
       });
 
-      version.put('/:id/replace', function(req, res, next) {
+      version.put('/:id', function(req, res, next) {
         if(req.body._id) delete req.body._id;
-        var objInterface = req.body.objInterface || [];
-        reduceSchema(objInterface.unshift(baseDocumentID))
+        var objInterface = (req.body.objInterface || []).map(function(schemaID) {
+          return new oid(schemaID);
+        });
+        objInterface.unshift(baseDocumentID);
+        reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);
           if(report.errors.length) {

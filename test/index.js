@@ -1,14 +1,19 @@
 var test = require('tape');
 var request = require('supertest');
-var app = require('../index').app;
+var index = require('../index');
 
-test('/test', function(t) {
-  request(app)
-    .get('/api/v1')
-    .expect(200)
-    .end(function(err, res) {
-      if(err) return t.end(err);
-      t.equal(res.body.toLowerCase(), 'ok', 'La respuesta debe ser igual a "ok"');
-      t.end();
-    });
+test('Index Testing', function(t) {
+  index.onLoaded(function(app, db) {
+    request(app)
+      .get('/test')
+      .expect(200)
+      .end(function(err, res) {
+        if(err) {
+          t.end(err);
+        } else {
+          t.equal(res.text.toLowerCase(), 'ok', 'La respuesta debe ser igual a "ok"');
+          t.end();
+        }
+      });
+  });
 });

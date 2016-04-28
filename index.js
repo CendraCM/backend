@@ -1,6 +1,6 @@
 var express = require('express');
 var app = express();
-var config = require('/etc/nodejs-config/cendraCM').backend;
+var config = require('/etc/service-config/service').backend;
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
@@ -9,6 +9,26 @@ var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.
 if(process.env.NODE_ENV == 'ci-testing') {
   url += '-ci-testing';
 }
+
+module.exports = {
+  fns: [],
+  started: false,
+  onLoaded: function(fn) {
+    if(this.started) fn(this.app, this.db);
+    else this.fns.push(fn);
+  },
+  loaded: function(app, db) {
+    this.app = app;
+    this.db = db;
+    this.started = true;
+    this.fns.forEach(function(fn) {
+      //process.nextTick(function(){
+        fn(app, db);
+      //})
+    })
+  }
+};
+
 mongo.getConnection(url)
 .then(function(db) {
   app.get('/test', function(req, res, next) {
@@ -48,7 +68,7 @@ mongo.getConnection(url)
       }
     });
   } else {
-    module.exports = {app: app, db: db};
+      module.exports.loaded(app, db);
   }
 })
 .catch(function(err) {

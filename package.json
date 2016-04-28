@@ -29,6 +29,7 @@
     "promise": "^7.1.1"
   },
   "devDependencies": {
+    "async": "^2.0.0-rc.3",
     "istanbul": "^0.4.2",
     "supertest": "^1.2.0",
     "tape": "^4.4.0"
