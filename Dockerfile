@@ -1,14 +1,10 @@
-FROM ubuntu
-
-RUN apt-get install -y curl
-RUN curl -sL https://deb.nodesource.com/setup_5.x | bash -
-RUN apt-get install -y nodejs
+FROM hub.psi.unc.edu.ar/base/node:5.11.0
 
 RUN mkdir -p /opt/project
 WORKDIR /opt/project
 
 COPY package.json /opt/project/
 RUN npm install
-COPY *.js /opt/project/
+COPY index.js /opt/project/
 COPY v1 /opt/project/
 CMD ["npm", "start"]
