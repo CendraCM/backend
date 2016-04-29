@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "ci-test": "NODE_ENV=\"ci-testing\" node ./node_modules/istanbul/lib/cli cover --dir /report/coverage ./node_modules/tape/bin/tape ./test/*.js > /report/test.tap && node ./node_modules/istanbul/lib/cli report --root /report/coverage --dir /report/coverage clover",
+    "ci-test": "NODE_ENV=\"ci-testing\" node ./node_modules/istanbul/lib/cli cover --dir /report/coverage ./node_modules/tape/bin/tape ./test/*.js > /report/test.tap && node ./node_modules/istanbul/lib/cli report --root /report/coverage --dir /report/coverage clover && cp index.js /report/index.js",
     "test": "tape ./test/*js"
   },
   "repository": {
