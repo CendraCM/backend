@@ -1,4 +1,4 @@
-FROM hub.psi.unc.edu.ar/base/node:5.11.0
+FROM hub.psi.unc.edu.ar/base/nodejs:5.11.0
 
 RUN mkdir -p /opt/project
 WORKDIR /opt/project
