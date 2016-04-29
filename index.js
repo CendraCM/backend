@@ -73,5 +73,5 @@ mongo.getConnection(url)
 })
 .catch(function(err) {
   console.log('Could not connect to Mongo');
-  process.exit();
+  process.exit(1);
 });
