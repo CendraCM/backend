@@ -2,7 +2,7 @@ var mongo = require('mongo-factory');
 var oid = require('mongodb').ObjectID;
 var express = require('express');
 var extend = require('extend');
-var config = require('/etc/nodejs-config/cendraCM').backend;
+var config = require('/etc/service-config/service').backend;
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 if(process.env.NODE_ENV == 'ci-testing') {
   url += '-ci-testing';

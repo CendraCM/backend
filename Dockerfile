@@ -5,5 +5,6 @@ WORKDIR /opt/project
 
 COPY package.json /opt/project/
 RUN npm install
-COPY ["index.js", "v1", "/opt/project/"]
+COPY index.js /opt/project
+COPY v1 /opt/project/v1
 CMD ["npm", "start"]
