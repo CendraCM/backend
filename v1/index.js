@@ -31,7 +31,7 @@ module.exports = function() {
             reject(err);
           });
         }
-        reject('No base document schema found');
+        reject('No base document schema found '+err);
       });
     }).then(function(baseDocumentID) {
       var isEmptyObject = function(obj) {
