@@ -41,14 +41,14 @@ module.exports = {
         acl: {
           type: 'object',
           patternProperies: {
-            '^.+$': {
+            '^\w+$': {
               type: 'object',
               properties: {
                 write: {type: 'boolean', default: false},
                 properties: {
                   type: 'object',
                   patternProperies: {
-                    '^.+$': {type: 'boolean', default: false}
+                    '^\w+$': {type: 'boolean', default: false}
                   }
                 }
               }
