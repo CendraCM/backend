@@ -23,9 +23,11 @@ module.exports = function() {
         if(!err && sch) {
           return resolve(sch._id);
         } else if(!err) {
-          return sc.insertOne(require('./documentClass'), {checkKeys: false})
+          return sc.insertOne({type: 'object'})
           .then(function(inserted) {
-            resolve(inserted.insertedId);
+            return sc.updateOne({_id: new oid(inserted.insertedId)}, require('.documentClass'), {checkKeys: false}).then(function(updated){
+              resolve(updated.upsertedId);
+            });
           })
           .catch(function(err) {
             reject(err);
