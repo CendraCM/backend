@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "cendraws",
   "version": "1.0.0",
   "description": "Backend de CendraCM",
   "main": "index.js",
@@ -30,8 +30,14 @@
   },
   "devDependencies": {
     "async": "^2.0.0-rc.3",
+    "dockerode": "^2.2.10",
+    "gulp": "^3.9.1",
+    "gulp-gitignore": "^0.1.0",
+    "gulp-tar": "^1.9.0",
+    "http-proxy": "^1.13.3",
     "istanbul": "^0.4.2",
     "supertest": "^1.2.0",
-    "tape": "^4.4.0"
+    "tape": "^4.4.0",
+    "vinyl-fs": "^2.4.3"
   }
 }

@@ -4,6 +4,7 @@ var config = require('/etc/service-config/service');
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
+var RedisStore = require('connect-redis');
 var fs = require('fs');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 if(process.env.NODE_ENV == 'ci-testing') {
@@ -42,10 +43,15 @@ mongo.getConnection(url)
     next();
   });
 
+  app.use(session({
+      store: new RedisStore(config.redis),
+      secret: '329cba3dabed5031b626ea76d59e33a6'
+  }));
+
   var api = express.Router();
 
   api.use(function(req, res, next) {
-    //Autenticar
+    if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !req.session.user && !req.url.match(/.*\/login$/)) return res.status(401).send("This action requires authentication");
     next();
   })
 
@@ -59,14 +65,7 @@ mongo.getConnection(url)
   });
 
   if(process.env.NODE_ENV != 'ci-testing') {
-    app.listen('/run/service/service.sock');
-    process.on('exit', function(){
-      try {
-        fs.unlinkSync('/run/service/service.sock');
-      }catch(e) {
-
-      }
-    });
+    app.listen(80);
   } else {
       module.exports.loaded(app, db);
   }

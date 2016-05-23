@@ -1,6 +1,6 @@
 module.exports = {
   type: 'object',
-  objName: 'BaseDocumentClass',
+  objName: 'BaseObjectInterface',
   objSecurity: {
     inmutable: true,
     acl: {
@@ -20,6 +20,16 @@ module.exports = {
         '^\w\w(-\w\w)?$': {type: 'string'}
       }
     },
+    objIcon: {
+      type: 'string'
+    },
+    objTags: {
+      type: 'array',
+      items: {
+        type: 'string'
+      },
+      minItems: 1
+    },
     objInterface: {
       type: 'array',
       items: {
@@ -31,6 +41,10 @@ module.exports = {
       type: 'object',
       properties: {
         inmutable: {type: 'boolean'},
+        owners: {
+          type: 'array',
+          minItems: 1
+        },
         locked: {
           type: 'object',
           properties: {
@@ -44,7 +58,13 @@ module.exports = {
             '^\w+$': {
               type: 'object',
               properties: {
-                write: {type: 'boolean', default: false},
+                write: {
+                  type: ['boolean', 'array'],
+                  items: {
+                    type: 'string'
+                  },
+                  default: false
+                },
                 properties: {
                   type: 'object',
                   patternProperies: {

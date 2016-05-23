@@ -19,21 +19,30 @@ module.exports = function() {
     var sc = db.collection('schemas');
 
     new Promise(function(resolve, reject) {
-      sc.find({'objName': 'BaseDocumentClass'}).limit(1).next(function(err, sch) {
-        if(!err && sch) {
-          return resolve(sch._id);
-        } else if(!err) {
-          return sc.insertOne(require('./documentClass'), {checkKeys: false})
-          .then(function(inserted) {
-            resolve(inserted.insertedId);
-          })
-          .catch(function(err) {
-            reject(err);
+      var ids = {};
+      var interfaces = ['BaseObjectInterface', 'ContentInterface', 'FolderInterface', 'GroupInterface', 'StoreInterface', 'UserInterface'];
+      var promises = interfaces.map(function(interfaceName) {
+        return new Promise(function(resolve, reject) {
+          sc.find({'objName': interfaceName}).limit(1).next(function(err, sch) {
+            if(!err && sch) {
+              return resolve(sch._id);
+            } else if(!err) {
+              return sc.insertOne(require('./interfaces/'+interfaceName), {checkKeys: false})
+              .then(function(inserted) {
+                resolve(inserted.insertedId);
+              })
+              .catch(function(err) {
+                reject(err);
+              });
+            }
+            reject('No base document schema found '+err);
           });
-        }
-        reject('No base document schema found '+err);
+        }).then(function(intId) {
+          ids[interfaceName] = intId;
+        });
       });
-    }).then(function(baseDocumentID) {
+      resolve(Promise.all(promises).then(function(){ return ids }));
+    }).then(function(ids) {
       var isEmptyObject = function(obj) {
         for(var i in obj) {
           return false;
@@ -107,6 +116,9 @@ module.exports = function() {
 
           });
         })
+      }
+
+      var checkACL = function(){
 
       }
 
@@ -120,7 +132,7 @@ module.exports = function() {
         var schemas = req.query.schemas.map(function(schemaID) {
           return new oid(schemaID);
         });
-        schemas.unshift(baseDocumentID);
+        schemas.unshift(ids.BaseObjectInterface);
         reduceSchema(schemas)
         .then(function(sch) {
           res.json(sch);
@@ -133,7 +145,7 @@ module.exports = function() {
         var objInterface = (req.body.objInterface || []).map(function(schemaID) {
           return new oid(schemaID);
         });
-        objInterface.unshift(baseDocumentID);
+        objInterface.unshift(ids.BaseObjectInterface);
         reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);
@@ -166,7 +178,7 @@ module.exports = function() {
         var objInterface = (req.body.objInterface || []).map(function(schemaID) {
           return new oid(schemaID);
         });
-        objInterface.unshift(baseDocumentID);
+        objInterface.unshift(ids.BaseObjectInterface);
         reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);
@@ -223,7 +235,7 @@ module.exports = function() {
         var objInterface = (req.body.objInterface || []).map(function(schemaID) {
           return new oid(schemaID);
         });
-        objInterface.unshift(baseDocumentID);
+        objInterface.unshift(ids.BaseObjectInterface);
         reduceSchema(objInterface)
         .then(function(base) {
           var report = jsv.validate(req.body, base);

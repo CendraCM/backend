@@ -1,0 +1,14 @@
+{
+  "docker": {
+    "socketPath": "/var/run/docker.sock"
+  },
+  "volumes": {
+    "/etc/service-config/service.json": {}
+  },
+  "binds": [
+    "/etc/nodejs-config/cendraws.json:/etc/service-config/service.json"
+  ],
+  "links": [
+    "mongo"
+  ]
+}
