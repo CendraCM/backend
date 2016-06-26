@@ -51,8 +51,48 @@ mongo.getConnection(url)
   var api = express.Router();
 
   api.use(function(req, res, next) {
-    if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !req.session.user && !req.url.match(/.*\/login$/)) return res.status(401).send("This action requires authentication");
-    next();
+    var token = req.query.token||req.body.token;
+    if(!token && req.headers.authentication) {
+      var auth = req.headers.authentication.split(' ');
+      if(auth[0] == 'Bearer') {
+        token = auth[1];
+      }
+    }
+    if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !token) return res.status(401).send("This action requires authentication token");
+    if(!token) return next();
+    var tokeninfo = function(req, res, next) {
+      request({url: config.tokeninfo, auth: {username: config.oauth2.key, password: config.oauth2.secret}, form: {token: token}}, function(error, headers, body) {
+        try {
+          req.token = JSON.parse(body);
+          if(!req.token.sub && config.userinfo) {
+            userinfo(req, res, next);
+          }
+        } catch(e) {
+          req.token = false;
+        }
+        next();
+      });
+    };
+    var userinfo = function(req, res, next) {
+      request({url: config.userinfo, auth: {bearer: token}}, function(error, headers, body) {
+        try {
+          user = JSON.parse(body);
+          if(user.sub) {
+            req.token.sub = user.sub;
+          }
+        } catch(e) {
+          req.token = false;
+        }
+        next();
+      });
+    };
+    if(config.tokeninfo) {
+      return tokeninfo(req, res, next);
+    }
+    if(config.userinfo) {
+      return userinfo(req, res, next);
+    }
+    return res.status(500).send("No authentication endpoint configured");
   })
 
   api.use('/v1', require('./v1')());

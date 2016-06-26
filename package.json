@@ -24,9 +24,11 @@
     "express": "^4.13.4",
     "express-session": "^1.13.0",
     "extend": "^3.0.0",
+    "fs-extra": "^0.30.0",
     "mongo-factory": "^1.0.0",
     "mongodb": "^2.1.7",
-    "promise": "^7.1.1"
+    "promise": "^7.1.1",
+    "redis-event-queue": "^1.0.1"
   },
   "devDependencies": {
     "async": "^2.0.0-rc.3",
