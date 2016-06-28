@@ -86,18 +86,29 @@ module.exports = function(ids, dc, sc) {
   };
 
   var validate = function(doc) {
-    var objInterface = (doc.objInterface || []).map(function(schemaID) {
-      return new oid(schemaID);
-    });
-    objInterface.unshift(ids.BaseObjectInterface);
-    return reduce(objInterface)
-    .then(function(base) {
-      var report = jsv.validate(doc, base);
-      if(report.errors.length) {
-        return Promise.reject(report.errors);
-      }
-      return Promise.resolve();
-    });
+    return sc.find({_id: new oid(ids.BaseObjectInterface)}).limit(1).next()
+      .then(function(iBase) {
+        var report = jsv.validate(doc, base);
+        if(report.errors.length) {
+          return Promise.reject(report.errors);
+        }
+        return Promise.resolve();
+      })
+      .then(function() {
+        if(!doc.objInterface) return Promise.resolve();
+        var iPromises = doc.objInterface.map(function(schemaID) {
+          return new Promise(function(resolve, reject) {
+            sc.find({_id: new oid(schemaID)}).limit(1).next(function(err, sch) {
+              var report = jsv.validate(doc[sch.objName]||{}, sch);
+              if(report.errors.length) {
+                return Promise.reject(report.errors);
+              }
+              return Promise.resolve();
+            });
+          });
+        });
+        return Promise.all(iPromises);
+      });
   };
 
   return {

@@ -21,22 +21,23 @@ module.exports = function(ids, dc, sc) {
       });
     })
     .then(function() {
-      var req.root = req.root||false;
-      var req.gid=req.gid||[];
-      var req.pgid = req.pgid||[];
+      req.root = req.root||false;
+      req.gid=req.gid||[];
+      req.pgid = req.pgid||[];
       if(!req.gid.length && req.groups.length) {
         req.groups.forEach(function(group) {
-          !req.root && (req.root=group.rootGroup);
+          if(!req.root) req.root=group.rootGroup;
           req.gid.push(group._id);
-          req.personalGroup && req.pgid.push(group._id);
+          if(req.personalGroup) req.pgid.push(group._id);
         });
       }
       return Promise.resolve();
     });
-  }
+  };
 
   var propertiesFilter = function(req, docs) {
-    var wasNotArray = false;
+    return Promise.resolve(docs);
+    /*var wasNotArray = false;
     if(!Array.isArray(docs)) {
       wasNotArray=true;
       docs = [docs];
@@ -55,7 +56,7 @@ module.exports = function(ids, dc, sc) {
           if(!isOwner && !hasAllProperties) {
             if(doc.owner.indexOf(id) !== -1) isOwner = true;
             if(!isOwner && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && Object.hasOwnProperty(doc.objSecurity.acl[id].properties, 'properties:all')) {
-              hasAllProperties = true
+              hasAllProperties = true;
             }
             if(!isOwner && !hasAllProperties && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties) {
               for(var i in doc.objSecurity.acl[id].properties) {
@@ -76,11 +77,13 @@ module.exports = function(ids, dc, sc) {
     }))
     .then(function(docs) {
       return (wasNotArray)?docs[0]:docs;
-    });
-  }
+    });*/
+  };
 
   var readFilter = function(req, res, next) {
-    groups(req)
+    req.filter = {};
+    return next();
+    /*groups(req)
     .then(function() {
       //Get all public documents
       if(req.root) {
@@ -105,7 +108,7 @@ module.exports = function(ids, dc, sc) {
         });
       }
       next();
-    });
+    });*/
   };
 
   var schemaAccess = function(from) {
@@ -114,22 +117,23 @@ module.exports = function(ids, dc, sc) {
       var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
-      dc.find({_id: {$in: ids.map(function(id) { return new oid(id)})}}).toArray(function(err, docs) {
+      sc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
         req.schs = [];
         docs.forEach(function(doc) {
-          doc.objInterface && doc.objInterface.forEach(function(ifName) {
-            req.schs.indexOf(ifName) === -1 && req.schs.push(ifName);
+          if(doc.objInterface) doc.objInterface.forEach(function(ifName) {
+            if(req.schs.indexOf(ifName) === -1) req.schs.push(ifName);
           });
         });
         if(!req.schs.length) return next();
         access(['schs'], 'read', from)(req, res, next);
       });
-    }
-  }
+    };
+  };
 
   var access = function(from, action, props) {
     return function(req, res, next) {
-      var ids = from.reduce(function(memo, key) {
+      return next();
+      /*var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
       if(props) {
@@ -142,21 +146,21 @@ module.exports = function(ids, dc, sc) {
       .then(function() {
         if(req.docs) Promise.resolve();
         return new Promise(function(resolve, reject) {
-          dc.find({_id: {$in: ids.map(function(id) { return new oid(id)})}}).toArray(function(err, docs) {
+          dc.find({_id: {$in: ids.map(function(id) { return new oid(id);})}}).toArray(function(err, docs) {
             resolve(docs);
-          })
-        })
+          });
+        });
       })
       .then(function(docs) {
         if(req.docs) Promise.resolve();
         return new Promise(function(resolve, reject) {
-          sc.find({_id: {$in: ids.map(function(id) { return new oid(id)})}}).toArray(function(err, schs) {
+          sc.find({_id: {$in: ids.map(function(id) { return new oid(id);})}}).toArray(function(err, schs) {
             resolve(docs.merge(schs));
           });
-        }));
+        });
       })
       .then(function(docs) {
-        !req.docs && (req.docs = docs);
+        if(!req.docs) req.docs = docs;
         Promise.all(req.docs.map(function(doc) {
           return new Promise(function(resolve, reject) {
             if(!doc) return reject({status: 404, msg: "Document not found"});
@@ -190,7 +194,7 @@ module.exports = function(ids, dc, sc) {
                 req.gid.forEach(function(id) {
                   if(!hasWriteAccess && doc.objSecurity.acl[id]) {
                     hasReadAccess = true;
-                    if(doc.objSecurity.acl[id].write) hasWriteAccess = true
+                    if(doc.objSecurity.acl[id].write) hasWriteAccess = true;
                   }
                   if(hasReadAccess && !hasAllProperties && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty("properties:all")) {
                     hasReadAllProperties = true;
@@ -223,13 +227,13 @@ module.exports = function(ids, dc, sc) {
               }
             }
             reject({status: 403, msg: "Access Forbiden"});
-          })
+          });
         }))
         .then(next)
         .catch(function(err) {
           res.status(err.status).send(err.msg);
-        })
-      });
+        });
+      });*/
     };
   };
 
@@ -237,6 +241,7 @@ module.exports = function(ids, dc, sc) {
     groups: groups,
     propertiesFilter: propertiesFilter,
     readFilter: readFilter,
-    access: access
+    access: access,
+    schemaAccess: schemaAccess
   };
-}
+};

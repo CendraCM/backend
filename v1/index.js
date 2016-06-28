@@ -6,6 +6,7 @@ var config = require('/etc/service-config/service');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 var fs = require('fs-extra');
 var path = requrie('path');
+var crypto = require('crypto');
 
 if(process.env.NODE_ENV == 'ci-testing') {
   url += '-ci-testing';
@@ -31,7 +32,7 @@ module.exports = function() {
 
     new Promise(function(resolve, reject) {
       var ids = {};
-      var interfaces = ['BaseObjectInterface', 'ContentInterface', 'FolderInterface', 'GroupInterface', 'StoreInterface', 'UserInterface'];
+      var interfaces = ['BaseObjectInterface', 'ContentInterface', 'FolderInterface', 'GroupInterface', 'StoreInterface', 'UserInterface', 'BinaryInterface'];
       var promises = interfaces.map(function(interfaceName) {
         return new Promise(function(resolve, reject) {
           sc.find({'objName': interfaceName}).limit(1).next(function(err, sch) {
@@ -76,7 +77,7 @@ module.exports = function() {
         });
       });
 
-      version.get('/schema/reduce', aclu.access(['query', 'schemas'], 'read'), function(req, res, next) {
+      /*version.get('/schema/reduce', aclu.access(['query', 'schemas'], 'read'), function(req, res, next) {
         var schemas = req.query.schemas.map(function(schemaID) {
           return new oid(schemaID);
         });
@@ -88,26 +89,26 @@ module.exports = function() {
         .catch(function(err) {
           res.status(500).send(err);
         });
-      });
+      });*/
 
       version.post('/schema', function(req, res, next) {
         aclu.groups(req)
         .then(function() {
-          if(!req.body.objSecurity) req.body.objSecurity = {};
-          req.body.objSecurity.owner = req.pgid;
+          if(!req.body.objSecurity) req.body.objSecurity = {inmutable: false};
+          req.body.objSecurity.owner = req.pgid||[];
           return schu.validate(req.body);
         })
         .then(function() {
           sc.insertOne(req.body)
           .then(function(inserted) {
-            res.send(inserted.insertedId);
+            res.send(inserted.ops);
           })
           .catch(function(err) {
             res.status(500).send(err);
           });
         })
         .catch(function(err) {
-          res.status(400).send(report.errors);
+          res.status(400).send(err.errors);
         });
       });
 
@@ -138,11 +139,13 @@ module.exports = function() {
       });
 
       version.post('/', aclu.schemaAccess(['body']), function(req, res, next) {
+        if(!req.body.objSecurity) req.body.objSecurity = {inmutable: false};
+        req.body.objSecurity.owner = req.pgid;
         schu.validate(req.body)
         .then(function() {
           dc.insertOne(req.body)
           .then(function(inserted) {
-            res.send(inserted.insertedId);
+            res.send(inserted.ops);
           })
           .catch(function(err) {
             res.status(500).send(err);
@@ -169,30 +172,32 @@ module.exports = function() {
 
       version.put('/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         if(req.body._id) delete req.body._id;
-        dc.find({"_id": new oid(req.params.id)}).limit(1).then(function(err, doc) {
+        dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           delete doc._id;
-          tc.insertOne(doc).then(function(i) {
-            tc.findOneAndUpdate({"_id": new oid(i.insertedId)}, {$set: req.body}).then(function(u) {
-              schu.validate(u.value)
-              .then(function() {
-                dc.updateOne({"_id": new oid(req.params.id)}, {$set: req.body}).then(function(updated) {
-                  res.send(updated.upsertedId);
-                })
-                .catch(function(err) {
-                  res.status(500).send(err);
-                });
-              })
-              .catch(function(err) {
-                res.status(400).send(report.errors);
-              });
-              tc.deleteOne({"_id": new oid(i.insertedId)});
+          tc.insertOne(doc)
+          .then(function(i) {
+            return tc.findOneAndUpdate({"_id": new oid(i.insertedId)}, {$set: req.body});
+          })
+          .then(function(u) {
+            tc.deleteOne({"_id": new oid(i.insertedId)});
+            return schu.validate(u.value);
+          })
+          .then(function() {
+            dc.updateOne({"_id": new oid(req.params.id)}, {$set: req.body}).then(function(updated) {
+              res.send(updated.upsertedId);
+            })
+            .catch(function(err) {
+              res.status(500).send(err);
             });
+          })
+          .catch(function(err) {
+            res.status(400).send(report.errors);
           });
         });
       });
 
       version.delete('/:id', aclu.access(['params', 'id'], 'delete'), function(req, res, next) {
-        dc.deleteOne(extend({"_id": new oid(req.params.id)}, req.filter))
+        dc.deleteOne({"_id": new oid(req.params.id)})
         .then(function(deleted) {
           res.status(204).send();
         })
@@ -218,17 +223,55 @@ module.exports = function() {
         });
       });
 
+      version.post('/binary/', function(req, res, next) {
+        var writeFile = function(filePath) {
+          fs.ensureDir(filePath, function(err) {
+            if(err) return res.status(500).send("Could not create file directory");
+            var stream = fs.createWriteStream(filePath);
+            req.pipe(stream);
+            req.on('end', function() {
+              //Guardar documento en mongo y devolverlo
+              //Por ahora, todos los documentos son de tipo "internal"
+              dc.insertOne({
+                objName: req.query.name,
+                objSecurity: {
+                  inmutable: false,
+                  owner: req.pgid
+                },
+                path: filePath,
+                internal: true})
+              .then(function(inserted) {
+                res.send(inserted.ops);
+              })
+              .catch(function(err) {
+                res.status(400).send(err);
+              });
+            });
+            req.on('error', function(err) {
+              res.status(500).send("Could not create file");
+            });
+          });
+        };
+        var mkName = function() {
+          var fileName = crypto.createHash('md5').update(Math.random()).update(Date.toISOString()).digest('hex');
+          var filePath = path.join((config.filePath||path.join(__dirname, '..', 'documents')), fileName.substr(0, 2), fileName);
+          fs.stat(filePath, function(err) {
+            if(err) writeFile(filePath);
+            else mkName();
+          });
+        };
+        mkName();
+      });
+
       version.get('/binary/:id', function(req, res, next) {
-        fs.ensureDir(path.join((config.filePath||'documents'), req.params.id.substr(0, 2)), function(err) {
-          if(err) return res.status(500).send("Could not create file directory");
-          var stream = fs.createWriteStream(path.join((config.filePath||'documents'), req.params.id.substr(0, 2), req.params.id));
-          req.pipe(stream);
-          req.on('end', function() {
-            //Guardar documento en mongo y devolverlo
+        var filePath = path.join((config.filePath||path.join(__dirname, '..', 'documents')), fileName.substr(0, 2), fileName);
+        fs.stat(filePath, function(err) {
+          if(err) return res.status(404).send('File not Found');
+          var stream = fs.createReadStream(filePath);
+          stream.on('error', function(err) {
+            res.status(500).send(err);
           });
-          req.on('error', function(err) {
-            res.status(500).send("Could not create file");
-          });
+          stream.pipe(res);
         });
       });
     })

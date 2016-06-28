@@ -42,8 +42,8 @@ gulp.task('docker', ['docker:build'], function dockerCreateTask(done) {
         console.log(data);
         done();
       });
-    })
-  })
+    });
+  });
 });
 
 gulp.task('docker:debug', ['docker:build'], function dockerCreateTask(done) {
@@ -71,36 +71,36 @@ gulp.task('docker:debug', ['docker:build'], function dockerCreateTask(done) {
 
         container.start(function(error, data) {
           console.log(error);
-          done && done();
+          if(done) done();
         });
       });
-    })
-  })
+    });
+  });
 });
 
 gulp.task('debug', ['docker:debug'], function serveTask() {
-  var portrange = 45032
+  var portrange = 45032;
 
   function getPort (cb) {
-    var port = portrange
-    portrange += 1
+    var port = portrange;
+    portrange += 1;
 
-    var server = net.createServer()
+    var server = net.createServer();
     server.listen(port, function (err) {
       server.once('close', function () {
-        cb(port)
-      })
-      server.close()
-    })
+        cb(port);
+      });
+      server.close();
+    });
     server.on('error', function (err) {
-      getPort(cb)
-    })
+      getPort(cb);
+    });
   }
 
   getPort(function(port) {
     httpProxy.createServer({target: 'http://localhost', ws:true, headers: {'Host': package.name+'__8080__.unc.edu.ar'}}).listen(port);
     console.log("node inspector listening on http://localhost:"+port+'/?port=5858');
-  })
+  });
 
 });
 
