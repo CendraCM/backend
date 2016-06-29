@@ -4,7 +4,7 @@ var config = require('/etc/service-config/service');
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
-var RedisStore = require('connect-redis');
+//var RedisStore = require('connect-redis');
 var fs = require('fs');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 if(process.env.NODE_ENV == 'ci-testing') {
@@ -26,7 +26,7 @@ module.exports = {
       //process.nextTick(function(){
         fn(app, db);
       //})
-    })
+    });
   }
 };
 
@@ -43,14 +43,14 @@ mongo.getConnection(url)
     next();
   });
 
-  app.use(session({
+  /*app.use(session({
       store: new RedisStore(config.redis),
       secret: '329cba3dabed5031b626ea76d59e33a6'
-  }));
+  }));*/
 
   var api = express.Router();
 
-  api.use(function(req, res, next) {
+  /*api.use(function(req, res, next) {
     var token = req.query.token||req.body.token;
     if(!token && req.headers.authentication) {
       var auth = req.headers.authentication.split(' ');
@@ -93,7 +93,7 @@ mongo.getConnection(url)
       return userinfo(req, res, next);
     }
     return res.status(500).send("No authentication endpoint configured");
-  })
+  });*/
 
   api.use('/v1', require('./v1')());
 
@@ -111,6 +111,6 @@ mongo.getConnection(url)
   }
 })
 .catch(function(err) {
-  console.log('Could not connect to Mongo');
+  console.log('Could not connect to Mongo '+url+' '+err);
   process.exit(1);
 });

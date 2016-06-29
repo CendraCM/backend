@@ -1,5 +1,7 @@
-FROM hub.psi.unc.edu.ar/base/nodejs:5.11.0
+FROM hub.psi.unc.edu.ar/base/nodejs:6.2.2
 
+RUN apt-get update
+RUN apt-get install -y python
 RUN mkdir -p /opt/project
 WORKDIR /opt/project
 

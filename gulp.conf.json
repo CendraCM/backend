@@ -3,10 +3,12 @@
     "socketPath": "/var/run/docker.sock"
   },
   "volumes": {
-    "/etc/service-config/service.json": {}
+    "/etc/service-config/service.json": {},
+    "/opt/project/documents": {}
   },
   "binds": [
-    "/etc/nodejs-config/cendraws.json:/etc/service-config/service.json"
+    "/etc/nodejs-config/cendraws.json:/etc/service-config/service.json",
+    "/tmp/cendra/documents:/opt/project/documents"
   ],
   "links": [
     "mongo"

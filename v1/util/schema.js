@@ -99,7 +99,10 @@ module.exports = function(ids, dc, sc) {
         var iPromises = doc.objInterface.map(function(schemaID) {
           return new Promise(function(resolve, reject) {
             sc.find({_id: new oid(schemaID)}).limit(1).next(function(err, sch) {
-              var report = jsv.validate(doc[sch.objName]||{}, sch);
+              var name = sch.objName;
+              var strname = sch.objName.substr(0, sch.objName.indexOf("Interface"));
+              var subdoc = doc[name] || doc[name.toLowerCase()] || doc[strname] || doc[strname.toLowerCase()];
+              var report = jsv.validate(subdoc||{}, sch);
               if(report.errors.length) {
                 return Promise.reject(report.errors);
               }

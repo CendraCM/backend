@@ -113,7 +113,7 @@ module.exports = function(ids, dc, sc) {
 
   var schemaAccess = function(from) {
     return function(req, res, next) {
-      if(req.schs) return access(['schs', 'read'])(req, res, next);
+      if(req.schs) return access(['schs'], 'read')(req, res, next);
       var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
@@ -125,7 +125,7 @@ module.exports = function(ids, dc, sc) {
           });
         });
         if(!req.schs.length) return next();
-        access(['schs'], 'read', from)(req, res, next);
+        access(['schs'], 'read')(req, res, next);
       });
     };
   };

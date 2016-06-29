@@ -5,7 +5,7 @@ var extend = require('extend');
 var config = require('/etc/service-config/service');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 var fs = require('fs-extra');
-var path = requrie('path');
+var path = require('path');
 var crypto = require('crypto');
 
 if(process.env.NODE_ENV == 'ci-testing') {
@@ -55,7 +55,7 @@ module.exports = function() {
       });
       resolve(Promise.all(promises).then(function(){ return ids; }));
     }).then(function(ids) {
-      require('trigges')(db, queue);
+      require('./triggers')(db, queue);
       return ids;
     }).then(function(ids) {
 
@@ -101,6 +101,7 @@ module.exports = function() {
         .then(function() {
           sc.insertOne(req.body)
           .then(function(inserted) {
+            queue.emit('insert:schema');
             res.send(inserted.ops);
           })
           .catch(function(err) {
@@ -145,6 +146,9 @@ module.exports = function() {
         .then(function() {
           dc.insertOne(req.body)
           .then(function(inserted) {
+            if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
+              queue.emit("insert:"+iface, inserted.ops);
+            });
             res.send(inserted.ops);
           })
           .catch(function(err) {
@@ -176,7 +180,7 @@ module.exports = function() {
           delete doc._id;
           tc.insertOne(doc)
           .then(function(i) {
-            return tc.findOneAndUpdate({"_id": new oid(i.insertedId)}, {$set: req.body});
+            return tc.findOneAndUpdate({"_id": new oid(i.insertedId)}, {$set: req.body}, {returnOriginal: false});
           })
           .then(function(u) {
             tc.deleteOne({"_id": new oid(i.insertedId)});
@@ -184,7 +188,10 @@ module.exports = function() {
           })
           .then(function() {
             dc.updateOne({"_id": new oid(req.params.id)}, {$set: req.body}).then(function(updated) {
-              res.send(updated.upsertedId);
+              if(updated.ops.objInterface) updated.ops.objInterface.forEach(function(iface) {
+                queue.emit("update:"+iface, updated.ops);
+              });
+              res.send(updated.ops);
             })
             .catch(function(err) {
               res.status(500).send(err);
@@ -197,8 +204,11 @@ module.exports = function() {
       });
 
       version.delete('/:id', aclu.access(['params', 'id'], 'delete'), function(req, res, next) {
-        dc.deleteOne({"_id": new oid(req.params.id)})
+        dc.findOneAndRemove({"_id": new oid(req.params.id)})
         .then(function(deleted) {
+          if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
+            queue.emit("delete:"+iface, deleted.value);
+          });
           res.status(204).send();
         })
         .catch(function(err) {
@@ -210,9 +220,12 @@ module.exports = function() {
         if(req.body._id) delete req.body._id;
         schu.validate(req.body)
         .then(function() {
-          dc.updateOne({"_id": new oid(req.params.id)}, req.body)
+          dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
           .then(function(updated) {
-            res.send(updated.upsertedId);
+            if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
+              queue.emit("update:"+iface, updated.value);
+            });
+            res.send(updated.value);
           })
           .catch(function(err) {
             res.status(500).send(err);
