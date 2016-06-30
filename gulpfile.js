@@ -78,7 +78,7 @@ gulp.task('docker:debug', ['docker:build'], function dockerCreateTask(done) {
   });
 });
 
-gulp.task('debug', ['docker:debug'], function serveTask() {
+gulp.task('debug', ['docker:debug', 'watch'], function serveTask() {
   var portrange = 45032;
 
   function getPort (cb) {
@@ -102,6 +102,10 @@ gulp.task('debug', ['docker:debug'], function serveTask() {
     console.log("node inspector listening on http://localhost:"+port+'/?port=5858');
   });
 
+});
+
+gulp.task('watch', function(){
+  gulp.watch(['index.js', 'v*/**/*.js'], ['docker:debug']);
 });
 
 gulp.task('reload', ['docker:debug'], function() {

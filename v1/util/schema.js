@@ -1,4 +1,7 @@
 var Promise = require('promise');
+var oid = require('mongodb').ObjectID;
+var JSV = require("JSV").JSV;
+var jsv = JSV.createEnvironment();
 
 module.exports = function(ids, dc, sc) {
 
@@ -86,9 +89,9 @@ module.exports = function(ids, dc, sc) {
   };
 
   var validate = function(doc) {
-    return sc.find({_id: new oid(ids.BaseObjectInterface)}).limit(1).next()
+    return sc.find({_id: ids.BaseObjectInterface}).limit(1).next()
       .then(function(iBase) {
-        var report = jsv.validate(doc, base);
+        var report = jsv.validate(doc, iBase);
         if(report.errors.length) {
           return Promise.reject(report.errors);
         }
@@ -99,14 +102,17 @@ module.exports = function(ids, dc, sc) {
         var iPromises = doc.objInterface.map(function(schemaID) {
           return new Promise(function(resolve, reject) {
             sc.find({_id: new oid(schemaID)}).limit(1).next(function(err, sch) {
+              if(err) return reject(err);
               var name = sch.objName;
               var strname = sch.objName.substr(0, sch.objName.indexOf("Interface"));
               var subdoc = doc[name] || doc[name.toLowerCase()] || doc[strname] || doc[strname.toLowerCase()];
               var report = jsv.validate(subdoc||{}, sch);
               if(report.errors.length) {
-                return Promise.reject(report.errors);
+                err = {};
+                err[sch.objName] = report.errors;
+                return reject(err);
               }
-              return Promise.resolve();
+              return resolve();
             });
           });
         });

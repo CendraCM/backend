@@ -3,28 +3,33 @@ var oid = require('mongodb').ObjectID;
 var express = require('express');
 var extend = require('extend');
 var config = require('/etc/service-config/service');
-var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
+var mongoUrl = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;
 var fs = require('fs-extra');
 var path = require('path');
+var url = require('url');
 var crypto = require('crypto');
+var util = require('util');
 
 if(process.env.NODE_ENV == 'ci-testing') {
-  url += '-ci-testing';
+  mongoUrl += '-ci-testing';
 }
-var JSV = require("JSV").JSV;
-var jsv = JSV.createEnvironment();
 var Promise = require('promise');
 
 if(config.redis) {
   var queue = new require('redis-event-queue')(config.redis).workqueue;
 } else {
-  var queue = new require('events')();
+  var EventEmitter = require('events');
+  var MyQueue = function () {
+    EventEmitter.call(this);
+  };
+  util.inherits(MyQueue, EventEmitter);
+  var queue = new MyQueue();
 }
 
 
 module.exports = function() {
   var version = express.Router();
-  mongo.getConnection(url)
+  mongo.getConnection(mongoUrl)
   .then(function(db) {
     var dc = db.collection('documents');
     var sc = db.collection('schemas');
@@ -109,7 +114,7 @@ module.exports = function() {
           });
         })
         .catch(function(err) {
-          res.status(400).send(err.errors);
+          res.status(400).send(err);
         });
       });
 
@@ -139,7 +144,7 @@ module.exports = function() {
         });
       });
 
-      version.post('/', aclu.schemaAccess(['body']), function(req, res, next) {
+      version.post('/', aclu.schemaAccess(['body', 'objInterface'], true), function(req, res, next) {
         if(!req.body.objSecurity) req.body.objSecurity = {inmutable: false};
         req.body.objSecurity.owner = req.pgid;
         schu.validate(req.body)
@@ -147,20 +152,20 @@ module.exports = function() {
           dc.insertOne(req.body)
           .then(function(inserted) {
             if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
-              queue.emit("insert:"+iface, inserted.ops);
+              queue.emit("insert:"+iface, inserted.ops[0]);
             });
-            res.send(inserted.ops);
+            res.send(inserted.ops[0]);
           })
           .catch(function(err) {
             res.status(500).send(err);
           });
         })
         .catch(function(err) {
-          res.status(400).send(report.errors);
+          res.status(400).send(err);
         });
       });
 
-      version.get('/:id', aclu.readFilter, function(req, res, next) {
+      version.get('/:id', aclu.schemaAccess(['params', 'id']), aclu.readFilter, function(req, res, next) {
         dc.find(extend({"_id": new oid(req.params.id)}, req.filter)).limit(1).next(function(err, doc) {
           if(err) return res.status(500).send(err);
           if(!doc) return res.status(404).send('Document Not Found');
@@ -174,37 +179,38 @@ module.exports = function() {
         });
       });
 
-      version.put('/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
+      version.put('/:id', aclu.schemaAccess(['params', 'id']), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         if(req.body._id) delete req.body._id;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           delete doc._id;
           tc.insertOne(doc)
           .then(function(i) {
-            return tc.findOneAndUpdate({"_id": new oid(i.insertedId)}, {$set: req.body}, {returnOriginal: false});
+            return tc.findOneAndUpdate({"_id": i.insertedId}, {$set: req.body}, {returnOriginal: false});
           })
           .then(function(u) {
-            tc.deleteOne({"_id": new oid(i.insertedId)});
+            tc.deleteOne({"_id": u.value._id});
             return schu.validate(u.value);
           })
           .then(function() {
-            dc.updateOne({"_id": new oid(req.params.id)}, {$set: req.body}).then(function(updated) {
-              if(updated.ops.objInterface) updated.ops.objInterface.forEach(function(iface) {
-                queue.emit("update:"+iface, updated.ops);
+            dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
+            .then(function(updated) {
+              if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
+                queue.emit("update:"+iface, updated.value);
               });
-              res.send(updated.ops);
+              res.send(updated.value);
             })
             .catch(function(err) {
               res.status(500).send(err);
             });
           })
           .catch(function(err) {
-            res.status(400).send(report.errors);
+            res.status(400).send(err);
           });
         });
       });
 
       version.delete('/:id', aclu.access(['params', 'id'], 'delete'), function(req, res, next) {
-        dc.findOneAndRemove({"_id": new oid(req.params.id)})
+        dc.findOneAndDelete({"_id": new oid(req.params.id)})
         .then(function(deleted) {
           if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
             queue.emit("delete:"+iface, deleted.value);
@@ -222,7 +228,7 @@ module.exports = function() {
         .then(function() {
           dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
           .then(function(updated) {
-            if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
+            if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
               queue.emit("update:"+iface, updated.value);
             });
             res.send(updated.value);
@@ -237,10 +243,13 @@ module.exports = function() {
       });
 
       version.post('/binary/', function(req, res, next) {
-        var writeFile = function(filePath) {
-          fs.ensureDir(filePath, function(err) {
+        var writeFile = function(filePath, fileName) {
+          fs.ensureFile(filePath, function(err) {
             if(err) return res.status(500).send("Could not create file directory");
             var stream = fs.createWriteStream(filePath);
+            stream.on('error', function(err) {
+              res.status(500).send("Could not create file");
+            });
             req.pipe(stream);
             req.on('end', function() {
               //Guardar documento en mongo y devolverlo
@@ -251,7 +260,7 @@ module.exports = function() {
                   inmutable: false,
                   owner: req.pgid
                 },
-                path: filePath,
+                path: url.resolve('/api/v1/binary/', fileName),
                 internal: true})
               .then(function(inserted) {
                 res.send(inserted.ops);
@@ -266,10 +275,10 @@ module.exports = function() {
           });
         };
         var mkName = function() {
-          var fileName = crypto.createHash('md5').update(Math.random()).update(Date.toISOString()).digest('hex');
+          var fileName = crypto.createHash('md5').update(Math.random()+"").update(new Date().toISOString()).digest('hex');
           var filePath = path.join((config.filePath||path.join(__dirname, '..', 'documents')), fileName.substr(0, 2), fileName);
           fs.stat(filePath, function(err) {
-            if(err) writeFile(filePath);
+            if(err) writeFile(filePath, fileName);
             else mkName();
           });
         };
@@ -277,7 +286,7 @@ module.exports = function() {
       });
 
       version.get('/binary/:id', function(req, res, next) {
-        var filePath = path.join((config.filePath||path.join(__dirname, '..', 'documents')), fileName.substr(0, 2), fileName);
+        var filePath = path.join((config.filePath||path.join(__dirname, '..', 'documents')), req.params.id.substr(0, 2), req.params.id);
         fs.stat(filePath, function(err) {
           if(err) return res.status(404).send('File not Found');
           var stream = fs.createReadStream(filePath);
@@ -293,7 +302,7 @@ module.exports = function() {
     });
   })
   .catch(function(err) {
-    console.log('Could not connect to Mongo '+url+' '+err);
+    console.log('Could not connect to Mongo '+mongoUrl+' '+err);
     process.exit();
   });
 

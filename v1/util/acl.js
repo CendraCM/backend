@@ -1,4 +1,5 @@
 var Promise = require('promise');
+var oid = require('mongodb').ObjectID;
 
 module.exports = function(ids, dc, sc) {
 
@@ -24,7 +25,7 @@ module.exports = function(ids, dc, sc) {
       req.root = req.root||false;
       req.gid=req.gid||[];
       req.pgid = req.pgid||[];
-      if(!req.gid.length && req.groups.length) {
+      if(!req.gid.length && req.groups && req.groups.length) {
         req.groups.forEach(function(group) {
           if(!req.root) req.root=group.rootGroup;
           req.gid.push(group._id);
@@ -111,22 +112,30 @@ module.exports = function(ids, dc, sc) {
     });*/
   };
 
-  var schemaAccess = function(from) {
+  var schemaAccess = function(from, fromInterface) {
     return function(req, res, next) {
       if(req.schs) return access(['schs'], 'read')(req, res, next);
       var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
-      sc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
-        req.schs = [];
-        docs.forEach(function(doc) {
-          if(doc.objInterface) doc.objInterface.forEach(function(ifName) {
-            if(req.schs.indexOf(ifName) === -1) req.schs.push(ifName);
-          });
-        });
+      if(!Array.isArray(ids)) ids = [ids];
+      if(fromInterface) {
+        req.schs = ids;
         if(!req.schs.length) return next();
         access(['schs'], 'read')(req, res, next);
-      });
+      } else {
+        dc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
+          req.schs = [];
+          docs.forEach(function(doc) {
+            if(doc.objInterface) doc.objInterface.forEach(function(ifName) {
+              if(req.schs.indexOf(ifName) === -1) req.schs.push(ifName);
+            });
+          });
+          if(!req.schs.length) return next();
+          access(['schs'], 'read')(req, res, next);
+        });
+      }
+
     };
   };
 

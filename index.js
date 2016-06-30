@@ -36,8 +36,8 @@ mongo.getConnection(url)
     res.send('Ok');
   });
 
-  app.use(parser.json());
-  app.use(parser.urlencoded({extended: true}));
+  app.use(parser.json({limit: config.maxSize||'50mb'}));
+  app.use(parser.urlencoded({extended: true, limit: config.maxSize||'50mb'}));
   app.use(function(req, res, next) {
     console.log(req.method+' '+req.originalUrl);
     next();

@@ -3,13 +3,15 @@ module.exports = function(emitter, ids, dc) {
     i: function(doc){
       dc.insertOne({
         objName: doc.objName+'Group',
-        objInterface: [ids.GroupInterface],
+        objInterface: [ids.GroupInterface.toHexString()],
         objSecurity: {
           inmutable: false
         },
-        personalGroup: true,
-        rootGroup: false,
-        objLinks: [doc._id]
+        group: {
+          personalGroup: true,
+          rootGroup: false,
+          objLinks: [doc._id.toHexString()]
+        }
       });
     }
   };
