@@ -10,6 +10,68 @@ module.exports = function(db, queue) {
   var schu = require('../util/schema')(ids, dc, sc);
 
   var wrapper = {
+    tg: {
+      insertOne: function(doc, options, callback) {
+        return wrapper.insertOne(doc, options)
+          .then(function(result) {
+            result.ops.forEach(function(doc) {
+              if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
+                queue.emit('insert:'+ifId, doc);
+              });
+            });
+            return Promise.resolve(result);
+          }, function(err) {
+            return Promise.reject(err);
+          })
+          .nodeify(callback);
+      },
+      insertMany: function(docs, options, callback) {
+        return wrapper.insertMany(docs, options)
+          .then(function(result) {
+            result.ops.forEach(function(doc) {
+              if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
+                queue.emit('insert:'+ifId, doc);
+              });
+            });
+            return Promise.resolve(result);
+          }, function(err) {
+            return Promise.reject(err);
+          })
+          .nodeify(callback);
+      },
+      updateOne: function(filter, update, options, callback) {
+        return wrapper.updateOne(filter, update, options)
+          .then(function(result) {
+            dc.find({_id: result.upsertedId}).limit(1)
+            .next(function(err, doc) {
+              if(!err && doc.objInterface) doc.objInterface.forEach(function(ifId) {
+                queue.emit('update:'+ifId, doc);
+              });
+            });
+            return Promise.resolve(result);
+          }, function(err) {
+            return Promise.reject(err);
+          })
+          .nodeify(callback);
+      },
+      updateMany: function(filter, update, options, callback) {
+        return wrapper.updateMany(filter, update, options)
+          .then(function(result) {
+            dc.find(filter)
+            .then(function(docs) {
+              docs.forEach(function(doc) {
+                if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
+                  queue.emit('update:'+ifId, doc);
+                });
+              });
+            });
+            return Promise.resolve(result);
+          }, function(err) {
+            return Promise.reject(err);
+          })
+          .nodeify(callback);
+      }
+    },
     insertOne: function(doc, options, callback) {
       return schu.validate(doc).then(function() {
         return dc.insertOne(doc, options, callback);
