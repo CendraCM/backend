@@ -37,6 +37,7 @@ gulp.task('docker', ['docker:build'], function dockerCreateTask(done) {
         Links: gulp_conf.links
       }
     }, function(error, container) {
+      if(error) return console.log(error);
       container.start(function(error, data) {
         console.log(error);
         console.log(data);

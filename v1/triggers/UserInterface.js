@@ -13,8 +13,8 @@ module.exports = function(emitter, ids, dc) {
           objLinks: [doc._id.toHexString()]
         }
       }).then(function(group) {
-        dc.insertOne({
-          objName: doc.objName+'Folder',
+        return dc.insertOne({
+          objName: 'Home',
           objInterface: [ids.FolderInterface.toHexString()],
           objSecurity: {
             inmutable: false,
@@ -26,6 +26,10 @@ module.exports = function(emitter, ids, dc) {
             objLinks: []
           }
         });
+      })
+      .then(function(home) {
+        doc.baseDirectory = [home._id.toHexString()];
+        dc.updateOne({_id: doc._id}, doc);
       });
     }
   };

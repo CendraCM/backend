@@ -11,6 +11,6 @@
     "/tmp/cendra/documents:/opt/project/documents"
   ],
   "links": [
-    "mongo"
+    "mongo:mongo"
   ]
 }

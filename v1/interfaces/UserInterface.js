@@ -20,6 +20,13 @@ module.exports = {
       },
       minItems: 1,
       required: true
+    },
+    baseDirectory: {
+      type: 'array',
+      items: {
+        type: 'string'
+      },
+      minItems: 1
     }
   }
 };

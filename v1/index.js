@@ -16,14 +16,17 @@ if(process.env.NODE_ENV == 'ci-testing') {
 var Promise = require('promise');
 
 if(config.redis) {
-  var queue = new require('redis-event-queue')(config.redis).workqueue;
+  var req = new require('redis-event-queue')(config.redis);
+  var wqueue = req.workqueue;
+  var bqueue = req.broadcast;
 } else {
   var EventEmitter = require('events');
   var MyQueue = function () {
     EventEmitter.call(this);
   };
   util.inherits(MyQueue, EventEmitter);
-  var queue = new MyQueue();
+  var wqueue = new MyQueue();
+  var bqueue = wqueue;
 }
 
 
@@ -60,7 +63,7 @@ module.exports = function() {
       });
       resolve(Promise.all(promises).then(function(){ return ids; }));
     }).then(function(ids) {
-      require('./triggers')(db, queue);
+      require('./triggers')(db, wqueue);
       return ids;
     }).then(function(ids) {
 
@@ -68,6 +71,28 @@ module.exports = function() {
       var schu = require('./util/schema')(ids, dc, sc);
       var aclu = require('./util/acl')(ids, dc, sc);
 
+      function emitGroupEvent(event, docs) {
+        if(!Array.isArray(docs)) docs = [docs];
+        docs.forEach(function(doc) {
+          bqueue.emit('root:'+event, doc);
+          var objSecurity = doc.objSecurity;
+          if(objSecurity) {
+            if(objSecurity.owner) {
+              objSecurity.owner.forEach(function(owner) {
+                bqueue.emit(owner+':'+event, doc);
+              });
+            }
+            if(objSecurity.acl) {
+              for(var i in objSecurity.acl) {
+                aclu.propertiesFilter({gid: [i]}, doc)
+                .then(function(doc) {
+                  bqueue.emit(i+':'+event, doc);
+                });
+              }
+            }
+          }
+        });
+      }
 
       version.get('/schema', aclu.readFilter, function(req, res, next) {
         sc.find(extend(req.query, req.filter)).toArray(function(err, schs) {
@@ -106,8 +131,10 @@ module.exports = function() {
         .then(function() {
           sc.insertOne(req.body)
           .then(function(inserted) {
-            queue.emit('insert:schema');
-            res.send(inserted.ops);
+            var doc = inserted.ops[0];
+            wqueue.emit('insert:schema', doc);
+            emitGroupEvent('insert:schema', doc);
+            res.send(doc);
           })
           .catch(function(err) {
             res.status(500).send(err);
@@ -152,8 +179,9 @@ module.exports = function() {
           dc.insertOne(req.body)
           .then(function(inserted) {
             if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
-              queue.emit("insert:"+iface, inserted.ops[0]);
+              wqueue.emit("insert:"+iface, inserted.ops[0]);
             });
+            emitGroupEvent('insert:document', inserted.ops[0]);
             res.send(inserted.ops[0]);
           })
           .catch(function(err) {
@@ -195,8 +223,9 @@ module.exports = function() {
             dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
             .then(function(updated) {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-                queue.emit("update:"+iface, updated.value);
+                wqueue.emit("update:"+iface, updated.value);
               });
+              emitGroupEvent('update:document', inserted.ops[0]);
               res.send(updated.value);
             })
             .catch(function(err) {
@@ -213,8 +242,9 @@ module.exports = function() {
         dc.findOneAndDelete({"_id": new oid(req.params.id)})
         .then(function(deleted) {
           if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
-            queue.emit("delete:"+iface, deleted.value);
+            wqueue.emit("delete:"+iface, deleted.value);
           });
+          emitGroupEvent('delete:document', inserted.ops[0]);
           res.status(204).send();
         })
         .catch(function(err) {
@@ -229,8 +259,9 @@ module.exports = function() {
           dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
           .then(function(updated) {
             if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-              queue.emit("update:"+iface, updated.value);
+              wqueue.emit("update:"+iface, updated.value);
             });
+            emitGroupEvent('update:document', inserted.ops[0]);
             res.send(updated.value);
           })
           .catch(function(err) {
@@ -256,6 +287,7 @@ module.exports = function() {
               //Por ahora, todos los documentos son de tipo "internal"
               dc.insertOne({
                 objName: req.query.name,
+                objInterface: [ids.BinaryInterface],
                 objSecurity: {
                   inmutable: false,
                   owner: req.pgid
@@ -263,7 +295,8 @@ module.exports = function() {
                 path: url.resolve('/api/v1/binary/', fileName),
                 internal: true})
               .then(function(inserted) {
-                res.send(inserted.ops);
+                res.send(inserted.ops[0]);
+                wqueue.emit("insert:"+ids.BinaryInterface, inserted.ops[0]);
               })
               .catch(function(err) {
                 res.status(400).send(err);
