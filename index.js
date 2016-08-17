@@ -4,6 +4,7 @@ var config = require('/etc/service-config/service');
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
+var request = require('request');
 //var RedisStore = require('connect-redis');
 var fs = require('fs');
 var url = 'mongodb://'+config.mongo.host+':'+config.mongo.port+'/'+config.mongo.db;

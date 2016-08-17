@@ -37,8 +37,8 @@ module.exports = function(ids, dc, sc) {
   };
 
   var propertiesFilter = function(req, docs) {
-    return Promise.resolve(docs);
-    /*var wasNotArray = false;
+    //return Promise.resolve(docs);
+    var wasNotArray = false;
     if(!Array.isArray(docs)) {
       wasNotArray=true;
       docs = [docs];
@@ -47,7 +47,7 @@ module.exports = function(ids, dc, sc) {
     return Promise.all(docs.map(function(doc) {
       return new Promise(function(resolve, reject) {
         if(req.gid.indexOf(doc._id)!==-1) return resolve(doc);
-        if(doc.objSecurity.acl && doc.objSecurity.acl["group:public"] && doc.objSecurity.acl["group:public"].properties && Object.hasOwnProperty(doc.objSecurity.acl["group:public"].properties, "properties:all")) {
+        if(doc.objSecurity.acl && doc.objSecurity.acl["group:public"] && doc.objSecurity.acl["group:public"].properties && doc.objSecurity.acl["group:public"].properties.hasOwnProperty("properties:all")) {
           return resolve(doc);
         }
         isOwner = false;
@@ -56,7 +56,7 @@ module.exports = function(ids, dc, sc) {
         req.gid.forEach(function(id) {
           if(!isOwner && !hasAllProperties) {
             if(doc.owner.indexOf(id) !== -1) isOwner = true;
-            if(!isOwner && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && Object.hasOwnProperty(doc.objSecurity.acl[id].properties, 'properties:all')) {
+            if(!isOwner && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty('properties:all')) {
               hasAllProperties = true;
             }
             if(!isOwner && !hasAllProperties && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties) {
@@ -78,13 +78,13 @@ module.exports = function(ids, dc, sc) {
     }))
     .then(function(docs) {
       return (wasNotArray)?docs[0]:docs;
-    });*/
+    });
   };
 
   var readFilter = function(req, res, next) {
     req.filter = {};
-    return next();
-    /*groups(req)
+    //return next();
+    groups(req)
     .then(function() {
       //Get all public documents
       if(req.root) {
@@ -92,7 +92,7 @@ module.exports = function(ids, dc, sc) {
         return next();
       }
       req.filter = {"objSecurity.acl.group:public": {$exists: true}};
-      if(req.groups.length) {
+      if(req.groups && req.groups.length) {
         req.filter = {$or: [req.filter]};
 
         //Is the same object
@@ -109,7 +109,7 @@ module.exports = function(ids, dc, sc) {
         });
       }
       next();
-    });*/
+    });
   };
 
   var schemaAccess = function(from, fromInterface) {
@@ -141,8 +141,8 @@ module.exports = function(ids, dc, sc) {
 
   var access = function(from, action, props) {
     return function(req, res, next) {
-      return next();
-      /*var ids = from.reduce(function(memo, key) {
+      //return next();
+      var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
       if(props) {
@@ -242,7 +242,7 @@ module.exports = function(ids, dc, sc) {
         .catch(function(err) {
           res.status(err.status).send(err.msg);
         });
-      });*/
+      });
     };
   };
 

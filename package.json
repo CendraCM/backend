@@ -28,7 +28,8 @@
     "mongo-factory": "^1.0.0",
     "mongodb": "^2.1.7",
     "promise": "^7.1.1",
-    "redis-event-queue": "^1.0.1"
+    "redis-event-queue": "^1.0.1",
+    "request": "^2.74.0"
   },
   "devDependencies": {
     "async": "^2.0.0-rc.3",
