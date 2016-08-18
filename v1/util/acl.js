@@ -32,6 +32,7 @@ module.exports = function(ids, dc, sc) {
           if(req.personalGroup) req.pgid.push(group._id);
         });
       }
+      if(!req.groups) req.groups=[];
       return Promise.resolve();
     });
   };
@@ -92,7 +93,7 @@ module.exports = function(ids, dc, sc) {
         return next();
       }
       req.filter = {"objSecurity.acl.group:public": {$exists: true}};
-      if(req.groups && req.groups.length) {
+      if(req.groups.length) {
         req.filter = {$or: [req.filter]};
 
         //Is the same object
@@ -164,7 +165,7 @@ module.exports = function(ids, dc, sc) {
         if(req.docs) Promise.resolve();
         return new Promise(function(resolve, reject) {
           sc.find({_id: {$in: ids.map(function(id) { return new oid(id);})}}).toArray(function(err, schs) {
-            resolve(docs.merge(schs));
+            resolve(docs.concat(schs));
           });
         });
       })
@@ -173,9 +174,9 @@ module.exports = function(ids, dc, sc) {
         Promise.all(req.docs.map(function(doc) {
           return new Promise(function(resolve, reject) {
             if(!doc) return reject({status: 404, msg: "Document not found"});
-            if(doc.objSecurity.inmutable) return reject({status: 403, msg: "Document is inmutable"});
+            if(action != 'read' && doc.objSecurity.inmutable) return reject({status: 403, msg: "Document is inmutable"});
             if(req.root) return resolve();
-            if(req.groups.length) {
+            if(req.groups.length || action == 'read') {
               if(req.gid.indexOf(doc._id)!==-1) return resolve();
               if(doc.objSecurity.owner) {
                 var isOwner = false;
@@ -238,7 +239,9 @@ module.exports = function(ids, dc, sc) {
             reject({status: 403, msg: "Access Forbiden"});
           });
         }))
-        .then(next)
+        .then(function(){
+          next();
+        })
         .catch(function(err) {
           res.status(err.status).send(err.msg);
         });
