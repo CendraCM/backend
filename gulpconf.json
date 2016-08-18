@@ -2,14 +2,29 @@
   "docker": {
     "socketPath": "/var/run/docker.sock"
   },
-  "volumes": {
-    "/etc/service-config/service.json": {},
-    "/opt/project/documents": {}
+  "project": {
+    "volumes": {
+      "/opt/project/test": "test",
+      "/opt/project/v1": "v1",
+      "/opt/project/node_modules": "node_modules",
+      "/opt/project/package.json": "package.json",
+      "/opt/project/index.js": "index.js"
+    },
+    "bk":{
+      "js": [
+        "index.js",
+        "v*/**/*.js"
+      ]
+    },
+    "tar": [
+      "Dockerfile",
+      "entrypoint.sh"
+    ]
   },
-  "binds": [
-    "/etc/nodejs-config/cendraws.json:/etc/service-config/service.json",
-    "/tmp/cendra/documents:/opt/project/documents"
-  ],
+  "volumes": {
+    "/etc/service-config/service.json": "/etc/nodejs-config/cendraws.json",
+    "/opt/project/documents": "/tmp/cendra/documents"
+  },
   "links": [
     "mongo:mongo",
     "virtualhost:yuli2.unc.edu.ar"

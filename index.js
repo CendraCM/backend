@@ -62,25 +62,18 @@ mongo.getConnection(url)
     if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !token) return res.status(401).send("This action requires authentication token");
     if(!token) return next();
     var tokeninfo = function(req, res, next) {
-      request({url: config.tokeninfo, method: 'POST', auth: {username: config.oauth2.key, password: config.oauth2.secret}, json: {access_token: token}}, function(error, headers, body) {
-        try {
-          req.token = JSON.parse(body);
-          if(!req.token.sub && config.userinfo) {
-            userinfo(req, res, next);
-          }
-        } catch(e) {
-          req.token = false;
+      request({url: config.tokeninfo, method: 'POST', auth: {username: config.oauth2.key, password: config.oauth2.secret}, json: {access_token: token}}, function(error, response, body) {
+        req.token = response.statusCode>=400?false:body;
+        if((!req.token || !req.token.sub) && config.userinfo) {
+          userinfo(req, res, next);
         }
         next();
       });
     };
     var userinfo = function(req, res, next) {
-      request({url: config.userinfo, auth: {bearer: token}}, function(error, headers, body) {
+      request({url: config.userinfo, auth: {bearer: token}}, function(error, response, body) {
         try {
-          user = JSON.parse(body);
-          if(user.sub) {
-            req.token.sub = user.sub;
-          }
+          req.token = JSON.parse(body);
         } catch(e) {
           req.token = false;
         }
