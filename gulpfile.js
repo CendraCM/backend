@@ -26,12 +26,18 @@ if(config.project.fe) {
     var target = temp();
     // It's not necessary to read the files (will speed up things), we're only after their paths:
     var js = gulp.src(config.project.fe.js||[]).pipe(angularFilesort()).pipe(map(function(file) {
-      file.dirname = path.relative(path.dirname(config.project.fe.index), file.dirname);
+      var indexPath = path.resolve(__dirname, path.dirname(config.project.fe.index));
+      var relative = path.relative(indexPath, file.path);
+      file.base = indexPath;
+      file.path = path.join(__dirname, relative);
       return file;
     }));
 
     var css = gulp.src(config.project.fe.css||[], {read: false}).pipe(map(function(file) {
-      file.dirname = path.relative(path.dirname(config.project.fe.index), file.dirname);
+      var indexPath = path.resolve(__dirname, path.dirname(config.project.fe.index));
+      var relative = path.relative(indexPath, file.path);
+      file.base = indexPath;
+      file.path = path.join(__dirname, relative);
       return file;
     }));
 
