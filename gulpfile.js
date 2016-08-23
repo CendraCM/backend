@@ -136,8 +136,8 @@ gulp.task('docker', ['docker:image'], function(done) {
       "/usr/lib/node_modules": "/usr/lib/node_modules"
     }
   };
-  var bowerShare = process.env.home+"/.local/share/bower";
-  debObj.volumes[bowerShare] = bowerShare;
+  var bowerShare = process.env.HOME+"/.local/share/bower";
+  devObj.volumes[bowerShare] = bowerShare;
   mkv(devObj);
   mkv(config);
   mkv(config.project);
@@ -169,7 +169,7 @@ gulp.task('docker:debug', ['docker:image'], function (done) {
       "/usr/lib/node_modules": "/usr/lib/node_modules"
     }
   };
-  var bowerShare = process.env.home+"/.local/share/bower";
+  var bowerShare = process.env.HOME+"/.local/share/bower";
   debObj.volumes[bowerShare] = bowerShare;
   mkv(devObj);
   mkv(config);
