@@ -131,7 +131,14 @@ gulp.task('docker', ['docker:image'], function(done) {
       }
     }
   };
-
+  var devObj = {
+    volumes: {
+      "/usr/lib/node_modules": "/usr/lib/node_modules"
+    }
+  };
+  var bowerShare = process.env.home+"/.local/share/bower";
+  debObj.volumes[bowerShare] = bowerShare;
+  mkv(devObj);
   mkv(config);
   mkv(config.project);
 
