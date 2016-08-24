@@ -8,7 +8,8 @@
       "/opt/project/v1": "v1",
       "/opt/project/node_modules": "node_modules",
       "/opt/project/package.json": "package.json",
-      "/opt/project/index.js": "index.js"
+      "/opt/project/index.js": "index.js",
+      "/home/agustin/git/redis-event-queue": "/home/agustin/git/redis-event-queue"
     },
     "bk":{
       "js": [
@@ -27,6 +28,7 @@
   },
   "links": [
     "mongo:mongo",
+    "redis:redis",
     "virtualhost:yuli2.unc.edu.ar"
   ]
 }

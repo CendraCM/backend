@@ -170,7 +170,7 @@ gulp.task('docker:debug', ['docker:image'], function (done) {
     }
   };
   var bowerShare = process.env.HOME+"/.local/share/bower";
-  debObj.volumes[bowerShare] = bowerShare;
+  devObj.volumes[bowerShare] = bowerShare;
   mkv(devObj);
   mkv(config);
   mkv(config.project);

@@ -2,7 +2,7 @@ var fs = require('fs');
 var Promise = require('promise');
 
 
-module.exports = function(db, queue) {
+module.exports = function(db, queue, evtu) {
   var dc = db.collection('documents');
   var sc = db.collection('schemas');
   var ids = {};
@@ -73,24 +73,60 @@ module.exports = function(db, queue) {
       }
     },
     insertOne: function(doc, options, callback) {
-      return schu.validate(doc).then(function() {
-        return dc.insertOne(doc, options, callback);
-      });
+      return new Promise(function(resolve, reject) {
+        return schu.validate(doc).then(function() {
+          return dc.insertOne(doc, options);
+        })
+        .then(function(result) {
+          evtu.emitGroupEvent('insert:document', doc);
+          resolve(result);
+        });
+      }).nodeify(callback);
+
     },
     insertMany: function(docs, options, callback) {
       return Promise.all(docs.map(schu.validate)).then(function() {
-        return dc.insertMany(docs, options, callback);
-      });
+        return dc.insertMany(docs, options)
+        .then(function(result) {
+          docs.forEach(function(doc) {
+            evtu.emitGroupEvent('insert:document', doc);
+          });
+          return Promise.resolve(result);
+        });
+      })
+      .nodeify(callback);
     },
     updateOne: function(filter, update, options, callback) {
-      return schu.validate(update).then(function() {
-        return dc.updateOne(filter, update, options, callback);
-      });
+      return new Promise(function(resolve, reject) {
+        return schu.validate(update).then(function() {
+          return dc.updateOne(filter, update, options);
+        })
+        .then(function(result) {
+          dc.findOne(filter)
+          .then(function(doc) {
+            evtu.emitGroupEvent('insert:document', doc);
+          });
+          return resolve(result);
+        });
+      })
+      .nodeify(callback);
     },
     updateMany: function(filter, update, options, callback) {
-      return schu.validate(update).then(function() {
-        return dc.updateMany(filter, update, options, callback);
-      });
+      return new Promise(function(resolve, reject) {
+        return schu.validate(update).then(function() {
+          return dc.updateMany(filter, update, options);
+        })
+        .then(function(result) {
+          dc.find(filter)
+          .then(function(docs) {
+            docs.forEach(function(doc) {
+              evtu.emitGroupEvent('insert:document', doc);
+            });
+          });
+          resolve(result);
+        });
+      })
+      .nodeify(callback);
     },
     find: dc.find,
     findOne: dc.findOne,

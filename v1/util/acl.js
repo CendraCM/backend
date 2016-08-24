@@ -7,7 +7,7 @@ module.exports = function(ids, dc, sc) {
     return new Promise(function(resolve, reject){
       if(req.user) return resolve();
       if(req.user || !req.token||!req.token.sub) return resolve();
-      dc.find({objInterface: ids.UserInterface, externalId: req.token.sub}).limit(1).then(function(err, user) {
+      dc.find({objInterface: ids.UserInterface.toHexString(), "user.externalId": req.token.sub}).limit(1).next(function(err, user) {
         if(user) req.user = user;
         resolve();
       });
@@ -15,7 +15,7 @@ module.exports = function(ids, dc, sc) {
     .then(function() {
       if(req.groups||!req.user) return Promise.resolve();
       return new Promise(function(resolve, reject) {
-        dc.find({objInterface: ids.GroupInterface, objLinks: user._id}).limit(1).then(function(err, groups) {
+        dc.find({objInterface: ids.GroupInterface.toHexString(), "group.objLinks": req.user._id.toHexString()}).toArray(function(err, groups) {
           if(groups) req.groups = groups;
           resolve();
         });
@@ -28,7 +28,7 @@ module.exports = function(ids, dc, sc) {
       if(!req.gid.length && req.groups && req.groups.length) {
         req.groups.forEach(function(group) {
           if(!req.root) req.root=group.rootGroup;
-          req.gid.push(group._id);
+          req.gid.push(group._id.toHexString());
           if(req.personalGroup) req.pgid.push(group._id);
         });
       }
@@ -47,7 +47,7 @@ module.exports = function(ids, dc, sc) {
     if(req.root) return Promise.resolve(docs);
     return Promise.all(docs.map(function(doc) {
       return new Promise(function(resolve, reject) {
-        if(req.gid.indexOf(doc._id)!==-1) return resolve(doc);
+        if(req.gid.concat((req.user&&req.user._id.toHexString())||[]).indexOf(doc._id.toHexString())!==-1) return resolve(doc);
         if(doc.objSecurity.acl && doc.objSecurity.acl["group:public"] && doc.objSecurity.acl["group:public"].properties && doc.objSecurity.acl["group:public"].properties.hasOwnProperty("properties:all")) {
           return resolve(doc);
         }
@@ -56,7 +56,7 @@ module.exports = function(ids, dc, sc) {
         allowedProps = [];
         req.gid.forEach(function(id) {
           if(!isOwner && !hasAllProperties) {
-            if(doc.owner.indexOf(id) !== -1) isOwner = true;
+            if(doc.objSecurity.owner.indexOf(id) !== -1) isOwner = true;
             if(!isOwner && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty('properties:all')) {
               hasAllProperties = true;
             }
@@ -97,7 +97,7 @@ module.exports = function(ids, dc, sc) {
         req.filter = {$or: [req.filter]};
 
         //Is the same object
-        req.filter.$or.push({_id: {$in: req.gid.map(function(id) {return new oid(id);})}});
+        req.filter.$or.push({_id: {$in: req.gid.map(function(id) {return new oid(id);}).concat([req.user._id])}});
 
         //Group is owner
         req.filter.$or.push({"objSecurity.owner": {$in: req.gid}});

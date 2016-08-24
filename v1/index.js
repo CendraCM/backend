@@ -37,6 +37,9 @@ module.exports = function() {
     var dc = db.collection('documents');
     var sc = db.collection('schemas');
     var tc = db.collection('temp');
+    var schu = null;
+    var aclu = null;
+    var evtu = null;
 
     new Promise(function(resolve, reject) {
       var ids = {};
@@ -63,36 +66,12 @@ module.exports = function() {
       });
       resolve(Promise.all(promises).then(function(){ return ids; }));
     }).then(function(ids) {
-      require('./triggers')(db, wqueue);
+      schu = require('./util/schema')(ids, dc, sc);
+      aclu = require('./util/acl')(ids, dc, sc);
+      evtu = require('./util/event')(bqueue, aclu);
+      require('./triggers')(db, wqueue, evtu);
       return ids;
     }).then(function(ids) {
-
-
-      var schu = require('./util/schema')(ids, dc, sc);
-      var aclu = require('./util/acl')(ids, dc, sc);
-
-      function emitGroupEvent(event, docs) {
-        if(!Array.isArray(docs)) docs = [docs];
-        docs.forEach(function(doc) {
-          bqueue.emit('root:'+event, doc);
-          var objSecurity = doc.objSecurity;
-          if(objSecurity) {
-            if(objSecurity.owner) {
-              objSecurity.owner.forEach(function(owner) {
-                bqueue.emit(owner+':'+event, doc);
-              });
-            }
-            if(objSecurity.acl) {
-              for(var i in objSecurity.acl) {
-                aclu.propertiesFilter({gid: [i]}, doc)
-                .then(function(doc) {
-                  bqueue.emit(i+':'+event, doc);
-                });
-              }
-            }
-          }
-        });
-      }
 
       version.get('/schema', aclu.readFilter, function(req, res, next) {
         sc.find(extend(req.query, req.filter)).toArray(function(err, schs) {
@@ -133,7 +112,7 @@ module.exports = function() {
           .then(function(inserted) {
             var doc = inserted.ops[0];
             wqueue.emit('insert:schema', doc);
-            emitGroupEvent('insert:schema', doc);
+            evtu.emitGroupEvent('insert:schema', doc);
             res.send(doc);
           })
           .catch(function(err) {
@@ -181,7 +160,7 @@ module.exports = function() {
             if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
               wqueue.emit("insert:"+iface, inserted.ops[0]);
             });
-            emitGroupEvent('insert:document', inserted.ops[0]);
+            evtu.emitGroupEvent('insert:document', inserted.ops[0]);
             res.send(inserted.ops[0]);
           })
           .catch(function(err) {
@@ -225,7 +204,7 @@ module.exports = function() {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                 wqueue.emit("update:"+iface, updated.value);
               });
-              emitGroupEvent('update:document', inserted.ops[0]);
+              evtu.emitGroupEvent('update:document', inserted.ops[0]);
               res.send(updated.value);
             })
             .catch(function(err) {
@@ -244,7 +223,7 @@ module.exports = function() {
           if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
             wqueue.emit("delete:"+iface, deleted.value);
           });
-          emitGroupEvent('delete:document', inserted.ops[0]);
+          evtu.emitGroupEvent('delete:document', inserted.ops[0]);
           res.status(204).send();
         })
         .catch(function(err) {
@@ -261,7 +240,7 @@ module.exports = function() {
             if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
               wqueue.emit("update:"+iface, updated.value);
             });
-            emitGroupEvent('update:document', inserted.ops[0]);
+            evtu.emitGroupEvent('update:document', inserted.ops[0]);
             res.send(updated.value);
           })
           .catch(function(err) {
