@@ -201,16 +201,17 @@ module.exports = function(ids, dc, sc) {
                     if(doc.objSecurity.acl["group:public"].properties["properties:all"]) hasAllProperties = true;
                   }
                 }
+                if(hasReadAllProperties && action == 'read') return resolve();
                 req.gid.forEach(function(id) {
                   if(!hasWriteAccess && doc.objSecurity.acl[id]) {
                     hasReadAccess = true;
                     if(doc.objSecurity.acl[id].write) hasWriteAccess = true;
                   }
-                  if(hasReadAccess && !hasAllProperties && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty("properties:all")) {
+                  if(hasReadAccess && !hasAllProperties && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty("properties:all")) {
                     hasReadAllProperties = true;
                     if(doc.objSecurity.acl[id].properties["properties:all"]) hasAllProperties = true;
                   }
-                  if(hasReadAccess && !hasAllProperties && doc.objSecurity.acl[id].properties) {
+                  if(hasReadAccess && !hasAllProperties && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties) {
                     for(var i in doc.objSecurity.acl[id].properties) {
                       if(allowedProps.indexOf(i) === -1 && doc.objSecurity.acl[id].properties[i])
                         allowedProps.push(i);

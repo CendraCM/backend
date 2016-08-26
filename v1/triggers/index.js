@@ -42,9 +42,9 @@ module.exports = function(db, queue, evtu) {
       updateOne: function(filter, update, options, callback) {
         return wrapper.updateOne(filter, update, options)
           .then(function(result) {
-            dc.find({_id: result.upsertedId}).limit(1)
+            dc.find(filter).limit(1)
             .next(function(err, doc) {
-              if(!err && doc.objInterface) doc.objInterface.forEach(function(ifId) {
+              if(!err && doc && doc.objInterface) doc.objInterface.forEach(function(ifId) {
                 queue.emit('update:'+ifId, doc);
               });
             });
@@ -74,18 +74,20 @@ module.exports = function(db, queue, evtu) {
     },
     insertOne: function(doc, options, callback) {
       return new Promise(function(resolve, reject) {
-        return schu.validate(doc).then(function() {
-          return dc.insertOne(doc, options);
-        })
-        .then(function(result) {
-          evtu.emitGroupEvent('insert:document', doc);
-          resolve(result);
+        schu.validate(doc)
+        .then(function() {
+          dc.insertOne(doc, options, function(err, result) {
+            if(err) return reject(err);
+            evtu.emitGroupEvent('insert:document', doc);
+            resolve(result);
+          });
         });
       }).nodeify(callback);
 
     },
     insertMany: function(docs, options, callback) {
-      return Promise.all(docs.map(schu.validate)).then(function() {
+      return Promise.all(docs.map(schu.validate))
+      .then(function() {
         return dc.insertMany(docs, options)
         .then(function(result) {
           docs.forEach(function(doc) {
@@ -98,7 +100,7 @@ module.exports = function(db, queue, evtu) {
     },
     updateOne: function(filter, update, options, callback) {
       return new Promise(function(resolve, reject) {
-        return schu.validate(update).then(function() {
+        schu.validate(update).then(function() {
           return dc.updateOne(filter, update, options);
         })
         .then(function(result) {
@@ -107,7 +109,8 @@ module.exports = function(db, queue, evtu) {
             evtu.emitGroupEvent('insert:document', doc);
           });
           return resolve(result);
-        });
+        })
+        .catch(reject);
       })
       .nodeify(callback);
     },
@@ -128,9 +131,9 @@ module.exports = function(db, queue, evtu) {
       })
       .nodeify(callback);
     },
-    find: dc.find,
-    findOne: dc.findOne,
-    count: dc.count
+    find: dc.find.bind(dc),
+    findOne: dc.findOne.bind(dc),
+    count: dc.count.bind(dc)
   };
 
   var addTg = function(name) {

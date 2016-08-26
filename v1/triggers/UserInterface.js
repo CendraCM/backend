@@ -1,3 +1,4 @@
+var oid = require('mongodb').ObjectID;
 module.exports = function(emitter, ids, dc) {
   return {
     i: function(doc){
@@ -13,13 +14,9 @@ module.exports = function(emitter, ids, dc) {
           objLinks: [doc._id.toString()]
         }
       }).then(function(group) {
-        dc.updateOne({_id: group.insertedId}, {$set: {"objSecurity.owner": [group.insertedId.toString()]}})
-        .then(function(result) {
-          console.log(result);
-        })
-        .catch(function(error) {
-          console.log(error);
-        });
+        var gobj = group.ops[0];
+        gobj.objSecurity.owner = [group.insertedId.toString()];
+        dc.updateOne({_id: group.insertedId}, gobj);
         return dc.insertOne({
           objName: 'Home',
           objInterface: [ids.FolderInterface.toString()],
@@ -38,9 +35,10 @@ module.exports = function(emitter, ids, dc) {
         });
       })
       .then(function(obj) {
+        doc._id = new oid(doc._id);
         doc.user.baseDirectory = [obj.home.insertedId.toString()];
         doc.objSecurity.owner = [obj.group.insertedId.toString()];
-        dc.updateOne({_id: doc._id}, doc).then(function(result) {
+        dc.tg.updateOne({_id: doc._id}, doc).then(function(result) {
           console.log(result);
         })
         .catch(function(error) {
