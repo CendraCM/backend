@@ -120,6 +120,44 @@ module.exports = function(ids, dc, sc) {
       });
   };
 
+  var idToOID = function(from) {
+    return function(req, res, next) {
+      var data = from.reduce(function(memo, key) {
+        return memo[key];
+      }, req);
+      var srchId = function(data) {
+        switch(typeof data) {
+          case 'object':
+            if(data._id) return trValue(data, '_id');
+            for(var i in data) {
+              srchId(data[i]);
+            }
+            break;
+          case 'array':
+            data.forEach(srchId);
+            break;
+        }
+      };
+      var trValue = function(data, key) {
+        switch(typeof data[key]) {
+          case 'string':
+            data[key] = new oid(data[key]);
+            break;
+          case 'object':
+            for(var i in data[key]) {
+              trValue(data[key], i);
+            }
+            break;
+          case 'array':
+            data.forEach(trValue);
+            break;
+        }
+      };
+      srchId(data);
+      next();
+    };
+  };
+
   return {
     isEmptyObject: isEmptyObject,
     compatible: compatible,

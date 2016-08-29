@@ -36,7 +36,7 @@ module.exports = function(emitter, ids, dc) {
       })
       .then(function(obj) {
         doc._id = new oid(doc._id);
-        doc.user.baseDirectory = [obj.home.insertedId.toString()];
+        doc.user.rootFolder = [obj.home.insertedId.toString()];
         doc.objSecurity.owner = [obj.group.insertedId.toString()];
         dc.tg.updateOne({_id: doc._id}, doc).then(function(result) {
           console.log(result);

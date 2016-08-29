@@ -73,7 +73,7 @@ module.exports = function() {
       return ids;
     }).then(function(ids) {
 
-      version.get('/schema', aclu.readFilter, function(req, res, next) {
+      version.get('/schema', aclu.readFilter, schu.idToOID('query'), function(req, res, next) {
         sc.find(extend(req.query, req.filter)).toArray(function(err, schs) {
           if(err) return res.status(500).send(err);
           aclu.propertiesFilter(req, schs)
@@ -137,7 +137,7 @@ module.exports = function() {
         });
       });
 
-      version.get('/', aclu.readFilter, function(req, res, next) {
+      version.get('/', aclu.readFilter, schu.idToOID('query'), function(req, res, next) {
         dc.find(extend(req.query, req.filter)).toArray(function(err, docs) {
           if(err) return res.status(500).send(err);
           aclu.propertiesFilter(req, docs)

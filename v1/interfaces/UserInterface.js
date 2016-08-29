@@ -21,7 +21,7 @@ module.exports = {
       minItems: 1,
       required: true
     },
-    baseDirectory: {
+    rootFolder: {
       type: 'array',
       items: {
         type: 'string'
