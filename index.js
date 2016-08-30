@@ -63,7 +63,7 @@ mongo.getConnection(url)
     if(!token) return next();
     var tokeninfo = function(req, res, next) {
       request({url: config.tokeninfo, method: 'POST', auth: {username: config.oauth2.key, password: config.oauth2.secret}, json: {access_token: token}}, function(error, response, body) {
-        req.token = response.statusCode>=400?false:body;
+        req.token = error||response.statusCode>=400?false:body;
         if((!req.token || !req.token.sub) && config.userinfo) {
           userinfo(req, res, next);
         }
