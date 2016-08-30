@@ -121,6 +121,7 @@ module.exports = function(ids, dc, sc) {
   };
 
   var idToOID = function(from) {
+    if(!Array.isArray(from)) from = [from];
     return function(req, res, next) {
       var data = from.reduce(function(memo, key) {
         return memo[key];
@@ -162,6 +163,7 @@ module.exports = function(ids, dc, sc) {
     isEmptyObject: isEmptyObject,
     compatible: compatible,
     reduce: reduce,
-    validate: validate
+    validate: validate,
+    idToOID: idToOID
   };
 };
