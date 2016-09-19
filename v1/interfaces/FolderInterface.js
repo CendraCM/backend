@@ -17,9 +17,6 @@ module.exports = {
       type: 'boolean',
       default: false
     },
-    rootFolder: {
-      type: 'boolean'
-    },
     objLinks: {
       type: 'array',
       items: {
