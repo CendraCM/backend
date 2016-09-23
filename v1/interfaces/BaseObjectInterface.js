@@ -33,7 +33,8 @@ module.exports = {
     objInterface: {
       type: 'array',
       items: {
-        type: 'string'
+        type: 'string',
+        objImplements: {any: true}
       },
       minItems: 1
     },
@@ -43,13 +44,22 @@ module.exports = {
         inmutable: {type: 'boolean'},
         owners: {
           type: 'array',
-          minItems: 1
+          minItems: 1,
+          objImplements: {name: 'GroupInterface'}
         },
         locked: {
           type: 'object',
           properties: {
-            date: {type: 'string', format: 'date-time', required: true},
-            user: {type: 'string', required: true}
+            date: {
+              type: 'string',
+              format: 'date-time',
+              required: true
+            },
+            user: {
+              type: 'string',
+              required: true,
+              objImplements: {name: 'GroupInterface'}
+            }
           }
         },
         acl: {

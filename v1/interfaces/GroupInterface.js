@@ -24,7 +24,8 @@ module.exports = {
     objLinks: {
       type: 'array',
       items: {
-        type: 'string'
+        type: 'string',
+        objImplements: {name: 'UserInterface'}
       }
     }
   }

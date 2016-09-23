@@ -18,7 +18,8 @@ module.exports = {
       required: true
     },
     store: {
-      type: 'string'
+      type: 'string',
+      objImplements: {name: 'StoreInterface'}
     },
     internal: {
       type: 'boolean',

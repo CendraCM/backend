@@ -24,7 +24,8 @@ module.exports = {
     rootFolder: {
       type: 'array',
       items: {
-        type: 'string'
+        type: 'string',
+        objImplements: {name: 'FolderInterface'}
       },
       minItems: 1
     }

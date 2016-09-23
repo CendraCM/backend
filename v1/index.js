@@ -36,6 +36,8 @@ module.exports = function() {
   .then(function(db) {
     var dc = db.collection('documents');
     var sc = db.collection('schemas');
+    dc.ensureIndex({objName: 'text'});
+    sc.ensureIndex({objName: 'text'});
     var tc = db.collection('temp');
     var schu = null;
     var aclu = null;
