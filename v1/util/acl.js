@@ -26,10 +26,10 @@ module.exports = function(ids, dc, sc) {
       req.gid=req.gid||[];
       req.pgid = req.pgid||[];
       if(!req.gid.length && req.groups && req.groups.length) {
-        req.groups.forEach(function(group) {
-          if(!req.root) req.root=group.rootGroup;
-          req.gid.push(group._id.toHexString());
-          if(req.personalGroup) req.pgid.push(group._id);
+        req.groups.forEach(function(instance) {
+          if(!req.root) req.root=instance.group.rootGroup;
+          req.gid.push(instance._id.toString());
+          if(instance.group.personalGroup) req.pgid.push(instance._id.toString());
         });
       }
       if(!req.groups) req.groups=[];
@@ -123,7 +123,10 @@ module.exports = function(ids, dc, sc) {
       if(fromInterface) {
         req.schs = ids;
         if(!req.schs.length) return next();
-        access(['schs'], 'read')(req, res, next);
+        access(['schs'], 'read')(req, res, function() {
+          delete req.docs;
+          next();
+        });
       } else {
         dc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
           req.schs = [];
@@ -133,21 +136,24 @@ module.exports = function(ids, dc, sc) {
             });
           });
           if(!req.schs.length) return next();
-          access(['schs'], 'read')(req, res, next);
+          access(['schs'], 'read')(req, res, function() {
+            delete req.docs;
+            next();
+          });
         });
       }
 
     };
   };
 
-  var access = function(from, action, props) {
+  var access = function(from, action, prs) {
     return function(req, res, next) {
       //return next();
       var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
-      if(props) {
-        props = props.reduce(function(memo, key) {
+      if(prs) {
+        props = prs.reduce(function(memo, key) {
           return memo[key];
         }, req);
       }
@@ -177,7 +183,7 @@ module.exports = function(ids, dc, sc) {
             if(action != 'read' && doc.objSecurity.inmutable) return reject({status: 403, msg: "Document is inmutable"});
             if(req.root) return resolve();
             if(req.groups.length || action == 'read') {
-              if(req.gid.indexOf(doc._id)!==-1) return resolve();
+              if(req.gid.indexOf(doc._id.toString())!==-1) return resolve();
               if(doc.objSecurity.owner) {
                 var isOwner = false;
                 doc.objSecurity.owner.forEach(function(owner) {
