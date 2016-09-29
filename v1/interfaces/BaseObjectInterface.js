@@ -3,6 +3,7 @@ module.exports = {
   objName: 'BaseObjectInterface',
   objSecurity: {
     inmutable: true,
+    implementable: ['none'],
     acl: {
       "group:public": {
         write: false,

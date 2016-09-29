@@ -75,6 +75,11 @@ module.exports = function() {
       return ids;
     }).then(function(ids) {
 
+      version.use(function(req, res, next) {
+        aclu.groups(req)
+        .then(next);
+      });
+
       version.get('/schema', aclu.readFilter, schu.idToOID('query'), function(req, res, next) {
         sc.find(extend(req.query, req.filter)).toArray(function(err, schs) {
           if(err) return res.status(500).send(err);
@@ -88,24 +93,42 @@ module.exports = function() {
         });
       });
 
-      /*version.get('/schema/reduce', aclu.access(['query', 'schemas'], 'read'), function(req, res, next) {
-        var schemas = req.query.schemas.map(function(schemaID) {
-          return new oid(schemaID);
+      version.get('/schema/implementable', aclu.readFilter, schu.idToOID('query'), function(req, res, next) {
+        sc.find(extend(req.query, req.filter)).toArray(function(err, schs) {
+          if(err) return res.status(500).send(err);
+          aclu.propertiesFilter(req, schs)
+          .then(function(schs) {
+            return Promise.all(schs.map(function(sch) {
+              return new Promise(function(resolve, reject) {
+                aclu.schemaImplementable(req, [sch])
+                .then(function(){
+                  resolve(sch);
+                })
+                .catch(function() {
+                  resolve();
+                });
+              });
+            }));
+          })
+          .then(function(schs) {
+            var filtered = schs.filter(function(sch) {
+              return !!sch;
+            });
+            return filtered;
+          })
+          .then(function(schs) {
+            res.json(schs);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
         });
-        schemas.unshift(ids.BaseObjectInterface);
-        schu.reduce(req, extend({_id: {$in: schemas}}, req.filter))
-        .then(function(sch) {
-          res.json(sch);
-        })
-        .catch(function(err) {
-          res.status(500).send(err);
-        });
-      });*/
+      });
 
       version.post('/schema', function(req, res, next) {
         aclu.groups(req)
         .then(function() {
-          if(!req.body.objSecurity) req.body.objSecurity = {inmutable: false};
+          if(!req.body.objSecurity) req.body.objSecurity = {inmutable: false, implementable: ['owner']};
           req.body.objSecurity.owner = req.pgid||[];
           return schu.validate(req.body);
         })
@@ -123,6 +146,41 @@ module.exports = function() {
         })
         .catch(function(err) {
           res.status(400).send(err);
+        });
+      });
+
+      version.put('/schema/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
+        if(req.body._id) delete req.body._id;
+        aclu.groups(req)
+        .then(function() {
+          sc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
+          .then(function(updated) {
+            wqueue.emit("update:schema", updated.value);
+            evtu.emitGroupEvent('update:schema', updated.value);
+            res.send(updated.value);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
+        })
+        .catch(function(err) {
+          res.status(400).send(err);
+        });
+      });
+
+      version.delete('/schema/:id', aclu.access(['params', 'id'], 'delete'), function(req, res, next) {
+        dc.find({"objInterface": req.params.id}).limit(1).next(function(err, sch) {
+          if(err) return res.status(500).send(err);
+          if(sch) return res.status(400).send("Interface used by other document");
+          sc.findOneAndDelete({"_id": new oid(req.params.id)})
+          .then(function(deleted) {
+            wqueue.emit("delete:schema", deleted.value);
+            evtu.emitGroupEvent('delete:schema', deleted.value);
+            res.status(204).send();
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
         });
       });
 
@@ -174,7 +232,7 @@ module.exports = function() {
         });
       });
 
-      version.get('/:id', aclu.schemaAccess(['params', 'id']), aclu.readFilter, function(req, res, next) {
+      version.get('/:id', aclu.readFilter, function(req, res, next) {
         dc.find(extend({"_id": new oid(req.params.id)}, req.filter)).limit(1).next(function(err, doc) {
           if(err) return res.status(500).send(err);
           if(!doc) return res.status(404).send('Document Not Found');
@@ -188,7 +246,7 @@ module.exports = function() {
         });
       });
 
-      version.put('/:id', aclu.schemaAccess(['params', 'id']), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
+      version.put('/:id', aclu.schemaAccess(['body', 'objInterface'], true), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         if(req.body._id) delete req.body._id;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           delete doc._id;
@@ -206,7 +264,7 @@ module.exports = function() {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                 wqueue.emit("update:"+iface, updated.value);
               });
-              evtu.emitGroupEvent('update:document', inserted.ops[0]);
+              evtu.emitGroupEvent('update:document', updated.value);
               res.send(updated.value);
             })
             .catch(function(err) {
@@ -225,7 +283,7 @@ module.exports = function() {
           if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
             wqueue.emit("delete:"+iface, deleted.value);
           });
-          evtu.emitGroupEvent('delete:document', inserted.ops[0]);
+          evtu.emitGroupEvent('delete:document', deleted.value);
           res.status(204).send();
         })
         .catch(function(err) {
@@ -235,22 +293,30 @@ module.exports = function() {
 
       version.put('/:id/replace', aclu.access(['params', 'id'], 'replace'), function(req, res, next) {
         if(req.body._id) delete req.body._id;
-        schu.validate(req.body)
-        .then(function() {
-          dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
-          .then(function(updated) {
-            if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-              wqueue.emit("update:"+iface, updated.value);
-            });
-            evtu.emitGroupEvent('update:document', inserted.ops[0]);
-            res.send(updated.value);
-          })
-          .catch(function(err) {
-            res.status(500).send(err);
+        dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
+          req.newInts = (req.body.objInterface||[]).filter(function(iface) {
+            return !(doc.objInterface||[]).includes(iface);
           });
-        })
-        .catch(function(err) {
-          res.status(400).send(err);
+          aclu.schemaAccess(['newInts'], true)(req, res, function(err) {
+            if(err) return res.status(500).send(err);
+            schu.validate(req.body)
+            .then(function() {
+              dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
+              .then(function(updated) {
+                if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
+                  wqueue.emit("update:"+iface, updated.value);
+                });
+                evtu.emitGroupEvent('update:document', inserted.ops[0]);
+                res.send(updated.value);
+              })
+              .catch(function(err) {
+                res.status(500).send(err);
+              });
+            })
+            .catch(function(err) {
+              res.status(400).send(err);
+            });
+          });
         });
       });
 

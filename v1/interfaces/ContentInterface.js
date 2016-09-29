@@ -3,6 +3,7 @@ module.exports = {
   objName: 'ContentInterface',
   objSecurity: {
     inmutable: true,
+    implementable: ['any'],
     acl: {
       "group:public": {
         write: false,

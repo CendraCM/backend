@@ -3,6 +3,7 @@ module.exports = {
   objName: 'GroupInterface',
   objSecurity: {
     inmutable: true,
+    implementable: ['any'],
     acl: {
       "group:public": {
         write: false,
@@ -18,6 +19,10 @@ module.exports = {
       default: false
     },
     rootGroup: {
+      type: 'boolean',
+      default: false
+    },
+    systemGroup: {
       type: 'boolean',
       default: false
     },

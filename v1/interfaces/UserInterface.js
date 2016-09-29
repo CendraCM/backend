@@ -3,6 +3,7 @@ module.exports = {
   objName: 'UserInterface',
   objSecurity: {
     inmutable: true,
+    implementable: ['system'],
     acl: {
       "group:public": {
         write: false,

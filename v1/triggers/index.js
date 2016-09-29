@@ -106,7 +106,7 @@ module.exports = function(db, queue, evtu) {
         .then(function(result) {
           dc.findOne(filter)
           .then(function(doc) {
-            evtu.emitGroupEvent('insert:document', doc);
+            evtu.emitGroupEvent('update:document', doc);
           });
           return resolve(result);
         })
@@ -123,7 +123,7 @@ module.exports = function(db, queue, evtu) {
           dc.find(filter)
           .then(function(docs) {
             docs.forEach(function(doc) {
-              evtu.emitGroupEvent('insert:document', doc);
+              evtu.emitGroupEvent('update:document', doc);
             });
           });
           resolve(result);

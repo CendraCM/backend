@@ -5,8 +5,7 @@ module.exports = function(ids, dc, sc) {
 
   var groups = function(req) {
     return new Promise(function(resolve, reject){
-      if(req.user) return resolve();
-      if(req.user || !req.token||!req.token.sub) return resolve();
+      if(req.user || !req.token || !req.token.sub) return resolve();
       dc.find({objInterface: ids.UserInterface.toHexString(), "user.externalId": req.token.sub}).limit(1).next(function(err, user) {
         if(user) req.user = user;
         resolve();
@@ -28,6 +27,7 @@ module.exports = function(ids, dc, sc) {
       if(!req.gid.length && req.groups && req.groups.length) {
         req.groups.forEach(function(instance) {
           if(!req.root) req.root=instance.group.rootGroup;
+          if(!req.system) req.system=instance.group.systemGroup;
           req.gid.push(instance._id.toString());
           if(instance.group.personalGroup) req.pgid.push(instance._id.toString());
         });
@@ -113,36 +113,66 @@ module.exports = function(ids, dc, sc) {
     });
   };
 
+  var schemaImplementable = function(req, schs) {
+    return Promise.all(schs.map(function(sch) {
+      return new Promise(function(resolve, reject) {
+        if(sch.objSecurity.implementable.includes('none')) return reject({status: 403, msg: "Access Forbiden"});
+        if(req.root) return resolve();
+        if(sch.objSecurity.implementable.includes('any')) return resolve();
+        if(sch.objSecurity.implementable.includes('system') && req.system) return resolve();
+        var intersectedOwners = (sch.objSecurity.owner||[]).filter(function(owner) {
+          return req.gid.includes(owner);
+        });
+        if(intersectedOwners.length) return resolve();
+        var intersectedAllowed = sch.objSecurity.implementable.filter(function(allowed) {
+          return req.gid.allowed;
+        });
+        if(intersectedAllowed.length) return resolve();
+        return reject({status: 403, msg: "Access Forbiden"});
+      });
+    }));
+  };
+
   var schemaAccess = function(from, fromInterface) {
     return function(req, res, next) {
-      if(req.schs) return access(['schs'], 'read')(req, res, next);
-      var ids = from.reduce(function(memo, key) {
-        return memo[key];
-      }, req);
-      if(!Array.isArray(ids)) ids = [ids];
-      if(fromInterface) {
-        req.schs = ids;
-        if(!req.schs.length) return next();
-        access(['schs'], 'read')(req, res, function() {
-          delete req.docs;
-          next();
-        });
-      } else {
-        dc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
-          req.schs = [];
-          docs.forEach(function(doc) {
-            if(doc.objInterface) doc.objInterface.forEach(function(ifName) {
-              if(req.schs.indexOf(ifName) === -1) req.schs.push(ifName);
+      groups(req)
+      .then(function() {
+        var isImplementable = function() {
+          sc.find({_id: {$in: req.schs.map(function(id) { return new oid(id);})}}).toArray(function(err, schs) {
+            schemaImplementable(req, schs)
+            .then(function(){
+              next();
+            })
+            .catch(function(err) {
+              res.status(err.status).send(err.msg);
             });
           });
-          if(!req.schs.length) return next();
-          access(['schs'], 'read')(req, res, function() {
-            delete req.docs;
-            next();
-          });
-        });
-      }
+        };
+        if(req.schs) return isImplementable();
 
+        var ids = from.reduce(function(memo, key) {
+          return memo[key];
+        }, req);
+        if(!Array.isArray(ids)) ids = [ids];
+
+        if(fromInterface) {
+          req.schs = ids;
+          if(!req.schs.length) return next();
+          isImplementable();
+        } else {
+          dc.find({_id: {$in: ids.map(function(id) { return new oid(id); })}}).toArray(function(err, docs) {
+            req.schs = [];
+            docs.forEach(function(doc) {
+              if(doc.objInterface) doc.objInterface.forEach(function(ifName) {
+                if(req.schs.indexOf(ifName) === -1) req.schs.push(ifName);
+              });
+            });
+            if(!req.schs.length) return next();
+            isImplementable();
+          });
+        }
+
+      });
     };
   };
 
@@ -261,6 +291,7 @@ module.exports = function(ids, dc, sc) {
     propertiesFilter: propertiesFilter,
     readFilter: readFilter,
     access: access,
+    schemaImplementable: schemaImplementable,
     schemaAccess: schemaAccess
   };
 };

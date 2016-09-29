@@ -3,6 +3,7 @@ module.exports = {
   objName: 'BinaryInterface',
   objSecurity: {
     inmutable: true,
+    implementable: ['any'],
     acl: {
       "group:public": {
         write: false,

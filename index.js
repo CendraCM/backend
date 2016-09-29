@@ -57,10 +57,15 @@ mongo.getConnection(url)
       var auth = req.headers.authorization.split(' ');
       if(auth[0] == 'Bearer') {
         token = auth[1];
+      } else if(auth[0] == 'Basic') {
+        var creds = new Buffer(auth[1], 'base64').toString('utf8').split(':');
+        if(config.system.user==creds[0]&&config.system.pass==creds[1]) {
+          req.system = true;
+        }
       }
     }
-    if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !token) return res.status(401).send("This action requires authentication token");
-    if(!token) return next();
+    if(['POST', 'PUT', 'DELETE'].indexOf(req.method)!==-1 && !token && !req.system) return res.status(401).send("This action requires authentication token");
+    if(!token || req.system) return next();
     var tokeninfo = function(req, res, next) {
       request({url: config.tokeninfo, method: 'POST', auth: {username: config.oauth2.key, password: config.oauth2.secret}, json: {token: token}}, function(error, response, body) {
         req.token = error||response.statusCode>=400?false:body;
