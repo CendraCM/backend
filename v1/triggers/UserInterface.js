@@ -3,7 +3,7 @@ module.exports = function(emitter, ids, dc) {
   return {
     i: function(doc){
       dc.insertOne({
-        objName: doc.objName+'Group',
+        objName: doc.objName+' Personal Group',
         objInterface: [ids.GroupInterface.toString()],
         objSecurity: {
           inmutable: false
