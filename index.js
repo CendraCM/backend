@@ -4,6 +4,7 @@ var config = require('/etc/service-config/service');
 var mongo = require('mongo-factory');
 var session = require('express-session');
 var parser = require('body-parser');
+var boolParser = require('express-query-boolean');
 var request = require('request');
 //var RedisStore = require('connect-redis');
 var fs = require('fs');
@@ -39,6 +40,7 @@ mongo.getConnection(url)
 
   app.use(parser.json({limit: config.maxSize||'50mb'}));
   app.use(parser.urlencoded({extended: true, limit: config.maxSize||'50mb'}));
+  app.use(boolParser());
   app.use(function(req, res, next) {
     console.log(req.method+' '+req.originalUrl);
     next();
