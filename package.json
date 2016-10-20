@@ -26,6 +26,7 @@
     "express-session": "^1.13.0",
     "extend": "^3.0.0",
     "fs-extra": "^0.30.0",
+    "moment": "^2.15.1",
     "mongo-factory": "^1.0.0",
     "mongodb": "^2.1.7",
     "promise": "^7.1.1",

@@ -1,5 +1,6 @@
 var Promise = require('promise');
 var oid = require('mongodb').ObjectID;
+var moment = require('moment');
 
 module.exports = function(ids, dc, sc) {
 
@@ -212,6 +213,9 @@ module.exports = function(ids, dc, sc) {
             if(!doc) return reject({status: 404, msg: "Document not found"});
             if(action != 'read' && doc.objSecurity.inmutable) return reject({status: 403, msg: "Document is inmutable"});
             if(req.root) return resolve();
+            if(action != 'read' && !req.root && doc.objSecurity.locked && !req.gid.includes(doc.objSecurity.locked.user) && moment(doc.objSecurity.locked.date).isSameOrAfter(moment().subtract(1, 'd'))) {
+              return reject({status: 409, msg: "Document locked for update"});
+            }
             if(req.groups.length || action == 'read') {
               if(req.gid.indexOf(doc._id.toString())!==-1) return resolve();
               if(doc.objSecurity.owner) {
