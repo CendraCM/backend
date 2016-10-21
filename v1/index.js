@@ -151,12 +151,21 @@ module.exports = function() {
 
       version.put('/schema/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         if(req.body._id) delete req.body._id;
+        var old = null;
         aclu.groups(req)
         .then(function() {
+          return new Promise(function(resolve, reject) {
+            sc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, sch) {
+              if(err) return reject(err);
+              resolve(sch);
+            });
+          });
+        })
+        .then(function(old) {
           sc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
           .then(function(updated) {
-            wqueue.emit("update:schema", updated.value);
-            evtu.emitGroupEvent('update:schema', updated.value);
+            wqueue.emit("update:schema", updated.value, old);
+            evtu.emitGroupEvent('update:schema', updated.value, old);
             res.send(updated.value);
           })
           .catch(function(err) {
@@ -174,8 +183,8 @@ module.exports = function() {
           if(sch) return res.status(400).send("Interface used by other document");
           sc.findOneAndDelete({"_id": new oid(req.params.id)})
           .then(function(deleted) {
-            wqueue.emit("delete:schema", deleted.value);
-            evtu.emitGroupEvent('delete:schema', deleted.value);
+            wqueue.emit("delete:schema", null, deleted.value);
+            evtu.emitGroupEvent('delete:schema', null, deleted.value);
             res.status(204).send();
           })
           .catch(function(err) {
@@ -246,9 +255,45 @@ module.exports = function() {
         });
       });
 
+      version.put('/:id/lock', aclu.access(['params', 'id'], 'update'), function(req, res, next) {
+        dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: {"objSecurity.locked": {user: req.pgid[0], date: moment().utc().format()}}}, {returnOriginal: false})
+        .then(function(doc) {
+          if(!doc) return Promise.reject('Document Not Found');
+          aclu.propertiesFilter(req, doc)
+          .then(function(doc) {
+            res.json(doc);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
+        })
+        .catch(function(err) {
+          res.status(400).send(err);
+        });
+      });
+
+      version.delete('/:id/lock', aclu.access(['params', 'id'], 'update'), function(req, res, next) {
+        dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$unset: {"objSecurity.locked": ""}}, {returnOriginal: false})
+        .then(function(doc) {
+          if(!doc) return Promise.reject('Document Not Found');
+          aclu.propertiesFilter(req, doc)
+          .then(function(doc) {
+            res.json(doc);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
+        })
+        .catch(function(err) {
+          res.status(400).send(err);
+        });
+      });
+
       version.put('/:id', aclu.schemaAccess(['body', 'objInterface'], true), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         if(req.body._id) delete req.body._id;
+        var old = null;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
+          old = extend({}, doc);
           delete doc._id;
           tc.insertOne(doc)
           .then(function(i) {
@@ -262,9 +307,9 @@ module.exports = function() {
             dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
             .then(function(updated) {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-                wqueue.emit("update:"+iface, updated.value);
+                wqueue.emit("update:"+iface, updated.value, old);
               });
-              evtu.emitGroupEvent('update:document', updated.value);
+              evtu.emitGroupEvent('update:document', updated.value, old);
               res.send(updated.value);
             })
             .catch(function(err) {
@@ -281,9 +326,9 @@ module.exports = function() {
         dc.findOneAndDelete({"_id": new oid(req.params.id)})
         .then(function(deleted) {
           if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
-            wqueue.emit("delete:"+iface, deleted.value);
+            wqueue.emit("delete:"+iface, null, deleted.value);
           });
-          evtu.emitGroupEvent('delete:document', deleted.value);
+          evtu.emitGroupEvent('delete:document', null, deleted.value);
           res.status(204).send();
         })
         .catch(function(err) {
@@ -293,7 +338,9 @@ module.exports = function() {
 
       version.put('/:id/replace', aclu.access(['params', 'id'], 'replace'), function(req, res, next) {
         if(req.body._id) delete req.body._id;
+        var old = null;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
+          old = doc;
           req.newInts = (req.body.objInterface||[]).filter(function(iface) {
             return !(doc.objInterface||[]).includes(iface);
           });
@@ -304,9 +351,9 @@ module.exports = function() {
               dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
               .then(function(updated) {
                 if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-                  wqueue.emit("update:"+iface, updated.value);
+                  wqueue.emit("update:"+iface, updated.value, old);
                 });
-                evtu.emitGroupEvent('update:document', inserted.ops[0]);
+                evtu.emitGroupEvent('update:document', inserted.ops[0], old);
                 res.send(updated.value);
               })
               .catch(function(err) {

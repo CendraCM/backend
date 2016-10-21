@@ -2,22 +2,23 @@ var Promise = require('promise');
 
 module.exports = function(bqueue, aclu) {
   return {
-    emitGroupEvent: function(event, docs) {
-      if(!Array.isArray(docs)) docs = [docs];
-      docs.forEach(function(doc) {
-        bqueue.emit('root:'+event, doc);
+    emitGroupEvent: function(event, newDocs, oldDocs) {
+      if(!Array.isArray(newDocs)) newDocs = [newDocs];
+      if(!Array.isArray(oldDocs)) oldDocs = [oldDocs];
+      (newDocs||oldDocs).forEach(function(doc, i) {
+        bqueue.emit('root:'+event, newDocs[i]||null, oldDocs[i]||null);
         var objSecurity = doc.objSecurity;
         if(objSecurity) {
           if(objSecurity.owner) {
             objSecurity.owner.forEach(function(owner) {
-              bqueue.emit(owner+':'+event, doc);
+              bqueue.emit(owner+':'+event, newDocs[i]||null, oldDocs[i]||null);
             });
           }
           if(objSecurity.acl) {
-            for(var i in objSecurity.acl) {
-              aclu.propertiesFilter({gid: [i]}, doc)
-              .then(function(doc) {
-                bqueue.emit(i+':'+event, doc);
+            for(var j in objSecurity.acl) {
+              aclu.propertiesFilter({gid: [j]}, [newDocs[i]||null, oldDocs[i]||null])
+              .then(function(docs) {
+                bqueue.emit(i+':'+event, docs[0], docs[1]);
               });
             }
           }
