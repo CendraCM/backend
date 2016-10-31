@@ -22,7 +22,7 @@ module.exports = {
       type: 'array',
       items: {
         type: 'string',
-        objImplements: {any: true}
+        objImplements: true
       }
     }
   }
