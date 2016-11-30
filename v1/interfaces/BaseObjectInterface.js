@@ -39,6 +39,14 @@ module.exports = {
       },
       minItems: 1
     },
+    objSchema: {
+      type: 'object',
+      patternProperies: {
+        '^\w+$': {
+          type: 'object'
+        }
+      }
+    },
     objSecurity: {
       type: 'object',
       properties: {
