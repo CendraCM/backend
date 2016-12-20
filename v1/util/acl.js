@@ -58,10 +58,10 @@ module.exports = function(ids, dc, sc) {
         req.gid.forEach(function(id) {
           if(!isOwner && !hasAllProperties) {
             if(doc.objSecurity.owner.indexOf(id) !== -1) isOwner = true;
-            if(!isOwner && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty('properties:all')) {
+            if(!isOwner && doc.objSecurity.acl && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties && doc.objSecurity.acl[id].properties.hasOwnProperty('properties:all')) {
               hasAllProperties = true;
             }
-            if(!isOwner && !hasAllProperties && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties) {
+            if(!isOwner && !hasAllProperties && doc.objSecurity.acl && doc.objSecurity.acl[id] && doc.objSecurity.acl[id].properties) {
               for(var i in doc.objSecurity.acl[id].properties) {
                 if(allowedProps.indexOf(i) === -1)
                   allowedProps.push(i);
@@ -183,6 +183,7 @@ module.exports = function(ids, dc, sc) {
       var ids = from.reduce(function(memo, key) {
         return memo[key];
       }, req);
+      var props = false;
       if(prs) {
         props = prs.reduce(function(memo, key) {
           return memo[key];

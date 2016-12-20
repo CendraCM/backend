@@ -9,6 +9,9 @@ var path = require('path');
 var url = require('url');
 var crypto = require('crypto');
 var util = require('util');
+var moment = require('moment');
+var jsonpatch = require('fast-json-patch');
+var toMongodb = require('jsonpatch-to-mongodb');
 
 if(process.env.NODE_ENV == 'ci-testing') {
   mongoUrl += '-ci-testing';
@@ -36,8 +39,11 @@ module.exports = function() {
   .then(function(db) {
     var dc = db.collection('documents');
     var sc = db.collection('schemas');
-    dc.ensureIndex({objName: 'text'});
-    sc.ensureIndex({objName: 'text'});
+    var vc = db.collection('versions');
+    dc.ensureIndex({objName: 1});
+    sc.ensureIndex({objName: 1});
+    vc.ensureIndex({type: 'text'});
+    vc.ensureIndex({doc: 'text'});
     var tc = db.collection('temp');
     var schu = null;
     var aclu = null;
@@ -149,9 +155,46 @@ module.exports = function() {
         });
       });
 
-      version.put('/schema/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
-        if(req.body._id) delete req.body._id;
-        var old = null;
+      version.put('/schema/:id/lock', aclu.access(['params', 'id'], 'update'), function(req, res, next) {
+        sc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: {"objSecurity.locked": {user: req.pgid[0], date: moment().utc().format()}}}, {returnOriginal: false})
+        .then(function(doc) {
+          if(!doc) return Promise.reject('Document Not Found');
+          aclu.propertiesFilter(req, doc)
+          .then(function(doc) {
+            res.json(doc);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
+        })
+        .catch(function(err) {
+          res.status(400).send(err);
+        });
+      });
+
+      version.delete('/schema/:id/lock', aclu.access(['params', 'id'], 'update'), function(req, res, next) {
+        sc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$unset: {"objSecurity.locked": ""}}, {returnOriginal: false})
+        .then(function(doc) {
+          if(!doc) return Promise.reject('Document Not Found');
+          aclu.propertiesFilter(req, doc)
+          .then(function(doc) {
+            res.json(doc);
+          })
+          .catch(function(err) {
+            res.status(500).send(err);
+          });
+        })
+        .catch(function(err) {
+          res.status(400).send(err);
+        });
+      });
+
+      version.patch('/schema/:id', aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
+        /**
+        * Now in req.body we expect a JSON Patch
+        */
+        //if(req.body._id) delete req.body._id;
+        //var old = null;
         aclu.groups(req)
         .then(function() {
           return new Promise(function(resolve, reject) {
@@ -162,7 +205,7 @@ module.exports = function() {
           });
         })
         .then(function(old) {
-          sc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
+          sc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
           .then(function(updated) {
             wqueue.emit("update:schema", updated.value, old);
             evtu.emitGroupEvent('update:schema', updated.value, old);
@@ -259,7 +302,7 @@ module.exports = function() {
         dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: {"objSecurity.locked": {user: req.pgid[0], date: moment().utc().format()}}}, {returnOriginal: false})
         .then(function(doc) {
           if(!doc) return Promise.reject('Document Not Found');
-          aclu.propertiesFilter(req, doc)
+          aclu.propertiesFilter(req, doc.value)
           .then(function(doc) {
             res.json(doc);
           })
@@ -276,7 +319,7 @@ module.exports = function() {
         dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$unset: {"objSecurity.locked": ""}}, {returnOriginal: false})
         .then(function(doc) {
           if(!doc) return Promise.reject('Document Not Found');
-          aclu.propertiesFilter(req, doc)
+          aclu.propertiesFilter(req, doc.value)
           .then(function(doc) {
             res.json(doc);
           })
@@ -289,22 +332,26 @@ module.exports = function() {
         });
       });
 
-      version.put('/:id', aclu.schemaAccess(['body', 'objInterface'], true), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
-        if(req.body._id) delete req.body._id;
+      version.patch('/:id', aclu.schemaAccess(['body', 'objInterface'], true), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
+        /**
+        * Now in req.body we expect a JSON Patch
+        */
+        //if(req.body._id) delete req.body._id;
+        //delete req.body.objSecurity.locked;
         var old = null;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           old = extend({}, doc);
           delete doc._id;
           tc.insertOne(doc)
           .then(function(i) {
-            return tc.findOneAndUpdate({"_id": i.insertedId}, {$set: req.body}, {returnOriginal: false});
+            return tc.findOneAndUpdate({"_id": i.insertedId}, toMongodb(req.body), {returnOriginal: false});
           })
           .then(function(u) {
             tc.deleteOne({"_id": u.value._id});
             return schu.validate(u.value);
           })
           .then(function() {
-            dc.findOneAndUpdate({"_id": new oid(req.params.id)}, {$set: req.body}, {returnOriginal: false})
+            dc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
             .then(function(updated) {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                 wqueue.emit("update:"+iface, updated.value, old);
@@ -336,11 +383,13 @@ module.exports = function() {
         });
       });
 
-      version.put('/:id/replace', aclu.access(['params', 'id'], 'replace'), function(req, res, next) {
+      version.put('/:id', aclu.access(['params', 'id'], 'replace'), function(req, res, next) {
         if(req.body._id) delete req.body._id;
         var old = null;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           old = doc;
+          if(!doc.objSecurity.locked) delete req.body.objSecurity.locked;
+          else req.body.objSecurity.locked = doc.objSecurity.locked;
           req.newInts = (req.body.objInterface||[]).filter(function(iface) {
             return !(doc.objInterface||[]).includes(iface);
           });
@@ -353,7 +402,7 @@ module.exports = function() {
                 if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                   wqueue.emit("update:"+iface, updated.value, old);
                 });
-                evtu.emitGroupEvent('update:document', inserted.ops[0], old);
+                evtu.emitGroupEvent('update:document', updated.value, old);
                 res.send(updated.value);
               })
               .catch(function(err) {

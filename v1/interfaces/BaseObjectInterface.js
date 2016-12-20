@@ -29,15 +29,17 @@ module.exports = {
       items: {
         type: 'string'
       },
+      uniqueItems: true,
       minItems: 1
     },
     objInterface: {
       type: 'array',
       items: {
         type: 'string',
-        objImplements: {any: true}
+        objImplements: true
       },
-      minItems: 1
+      minItems: 1,
+      uniqueItems: true,
     },
     objSchema: {
       type: 'object',
@@ -54,7 +56,11 @@ module.exports = {
         owners: {
           type: 'array',
           minItems: 1,
-          objImplements: {name: 'GroupInterface'}
+          items: {
+            type: 'string',
+            objImplements: {name: 'GroupInterface'}
+          },
+          uniqueItems: true
         },
         locked: {
           type: 'object',
@@ -82,6 +88,7 @@ module.exports = {
                   items: {
                     type: 'string'
                   },
+                  uniqueItems: true,
                   default: false
                 },
                 properties: {

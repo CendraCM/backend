@@ -31,7 +31,8 @@ module.exports = {
       items: {
         type: 'string',
         objImplements: {name: 'UserInterface'}
-      }
+      },
+      uniqueItems: true
     }
   }
 };

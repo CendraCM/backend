@@ -23,7 +23,8 @@ module.exports = {
       items: {
         type: 'string',
         objImplements: true
-      }
+      },
+      uniqueItems: true
     }
   }
 };

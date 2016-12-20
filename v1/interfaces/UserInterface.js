@@ -19,6 +19,7 @@ module.exports = {
       items: {
         type: 'string'
       },
+      uniqueItems: true,
       minItems: 1,
       required: true
     },
@@ -28,6 +29,7 @@ module.exports = {
         type: 'string',
         objImplements: {name: 'FolderInterface'}
       },
+      uniqueItems: true,
       minItems: 1
     }
   }

@@ -1,10 +1,12 @@
 var fs = require('fs');
 var Promise = require('promise');
+var jsonpatch = require('fast-json-patch');
 
 
 module.exports = function(db, queue, evtu) {
   var dc = db.collection('documents');
   var sc = db.collection('schemas');
+  var vc = db.collection('versions');
   var ids = {};
 
   var schu = require('../util/schema')(ids, dc, sc);
@@ -159,6 +161,24 @@ module.exports = function(db, queue, evtu) {
             if(iud.toLowerCase().indexOf("d")!== -1) queue.on('delete:'+ids[name], triggers[iud]);
           }
         }
+        queue.on('insert:'+ids[name], function(newDoc, oldDoc) {
+          var verDoc = {
+            doc: newDoc._id,
+            type: 'document',
+            versions: {}
+          };
+          vc.insert(verDoc);
+        });
+        queue.on('update:'+ids[name], function(newDoc, oldDoc) {
+          var ptw = {};
+          ptw[Date.now()] = jsonpatch.compare(newDoc, oldDoc);
+          vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
+        });
+        queue.on('delete:'+ids[name], function(newDoc, oldDoc) {
+          var ptw = {};
+          ptw[Date.now()] = jsonpatch.compare({}, oldDoc);
+          vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
+        });
       } catch(e){}
     });
   };
@@ -174,6 +194,24 @@ module.exports = function(db, queue, evtu) {
   };
 
   queue.on('insert:schema', readSch);
+  queue.on('insert:schema', function(newDoc, oldDoc) {
+    var verDoc = {
+      doc: newDoc._id,
+      type: 'schema',
+      versions: {}
+    };
+    vc.insert(verDoc);
+  });
+  queue.on('update:schema', function(newDoc, oldDoc) {
+    var ptw = {};
+    ptw[Date.now()] = jsonpatch.compare(newDoc, oldDoc);
+    vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
+  });
+  queue.on('delete:schema', function(newDoc, oldDoc) {
+    var ptw = {};
+    ptw[Date.now()] = jsonpatch.compare({}, oldDoc);
+    vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
+  });
 
   fs.watch(__dirname, readSch);
 

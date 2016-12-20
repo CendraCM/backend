@@ -2,7 +2,7 @@ var oid = require('mongodb').ObjectID;
 module.exports = function(emitter, ids, dc) {
   return {
     i: function(doc){
-      dc.insertOne({
+      dc.tg.insertOne({
         objName: doc.objName+' Personal Group',
         objInterface: [ids.GroupInterface.toString()],
         objSecurity: {
@@ -17,7 +17,7 @@ module.exports = function(emitter, ids, dc) {
         var gobj = group.ops[0];
         gobj.objSecurity.owner = [group.insertedId.toString()];
         dc.updateOne({_id: group.insertedId}, gobj);
-        return dc.insertOne({
+        return dc.tg.insertOne({
           objName: 'Home',
           objInterface: [ids.FolderInterface.toString()],
           objSecurity: {
