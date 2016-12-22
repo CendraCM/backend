@@ -1,12 +1,17 @@
 var Promise = require('promise');
 
-module.exports = function(bqueue, aclu) {
+module.exports = function(bqueue, aclu, dc, ids) {
   return {
     emitGroupEvent: function(event, newDocs, oldDocs) {
       if(!Array.isArray(newDocs)) newDocs = [newDocs];
       if(!Array.isArray(oldDocs)) oldDocs = [oldDocs];
       (newDocs||oldDocs).forEach(function(doc, i) {
-        bqueue.emit('root:'+event, newDocs[i]||null, oldDocs[i]||null);
+        dc.find({objInterface: ids.GroupInterface, rootGroup: true})
+        .toArray(function(err, groups) {
+          if(groups) groups.forEach(function(group) {
+            bqueue.emit(group._id+':root:'+event, newDocs[i]||null, oldDocs[i]||null);
+          });
+        });
         var objSecurity = doc.objSecurity;
         if(objSecurity) {
           if(objSecurity.owner) {
@@ -18,7 +23,7 @@ module.exports = function(bqueue, aclu) {
             for(var j in objSecurity.acl) {
               aclu.propertiesFilter({gid: [j]}, [newDocs[i]||null, oldDocs[i]||null])
               .then(function(docs) {
-                bqueue.emit(i+':'+event, docs[0], docs[1]);
+                bqueue.emit(j+':'+event, docs[0], docs[1]);
               });
             }
           }

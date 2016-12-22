@@ -18,7 +18,7 @@ module.exports = function(db, queue, evtu) {
           .then(function(result) {
             result.ops.forEach(function(doc) {
               if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
-                queue.emit('insert:'+ifId, doc);
+                queue.emit('insert:'+ifId, doc, null, {type: 'trigger'});
               });
             });
             return Promise.resolve(result);
@@ -32,7 +32,7 @@ module.exports = function(db, queue, evtu) {
           .then(function(result) {
             result.ops.forEach(function(doc) {
               if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
-                queue.emit('insert:'+ifId, doc);
+                queue.emit('insert:'+ifId, doc, null, {type: 'trigger'});
               });
             });
             return Promise.resolve(result);
@@ -42,28 +42,44 @@ module.exports = function(db, queue, evtu) {
           .nodeify(callback);
       },
       updateOne: function(filter, update, options, callback) {
-        return wrapper.updateOne(filter, update, options)
+        var old;
+        return new Promise(function(resolve, reject) {
+            dc.find(filter).limit(1).next(function(err, doc) {
+              if(err) return reject(err);
+              old = doc;
+              resolve();
+            });
+          })
+          .then(function() {
+            return wrapper.updateOne(filter, update, options);
+          })
           .then(function(result) {
             dc.find(filter).limit(1)
             .next(function(err, doc) {
               if(!err && doc && doc.objInterface) doc.objInterface.forEach(function(ifId) {
-                queue.emit('update:'+ifId, doc);
+                queue.emit('update:'+ifId, doc, old, {type: 'trigger'});
               });
             });
             return Promise.resolve(result);
-          }, function(err) {
-            return Promise.reject(err);
           })
           .nodeify(callback);
       },
       updateMany: function(filter, update, options, callback) {
-        return wrapper.updateMany(filter, update, options)
+        var olds;
+        return dc.find(filter)
+          .then(function(result) {
+            olds = result;
+            return wrapper.updateMany(filter, update, options);
+          })
           .then(function(result) {
             dc.find(filter)
             .then(function(docs) {
               docs.forEach(function(doc) {
+                var old = olds.filter(function(old) {
+                  return doc._id == old._id;
+                })[0];
                 if(doc.objInterface) doc.objInterface.forEach(function(ifId) {
-                  queue.emit('update:'+ifId, doc);
+                  queue.emit('update:'+ifId, doc, old, {type: 'trigger'});
                 });
               });
             });
@@ -138,48 +154,70 @@ module.exports = function(db, queue, evtu) {
     count: dc.count.bind(dc)
   };
 
+  var versionIns = function(type, newDoc, oldDoc, user) {
+    var verDoc = {
+      doc: newDoc._id,
+      type: type,
+      objName: newDoc.objName,
+      versions: [{type: 'create', time: Date.now(), fw: jsonpatch.compare({}, newDoc), user: user}]
+    };
+    vc.insert(verDoc);
+  };
+
+  var versionUpd = function(newDoc, oldDoc, user) {
+    vc.findOneAndUpdate({doc: oldDoc._id}, {$push: {versions: {type: 'modify', time: Date.now(), bck: jsonpatch.compare(newDoc, oldDoc), fw: jsonpatch.compare(oldDoc, newDoc), user: user}}});
+  };
+
+  var versionDel = function(newDoc, oldDoc, user) {
+    vc.findOneAndUpdate({doc: oldDoc._id}, {$push: {versions: {type: 'remove', time: Date.now(), bck: jsonpatch.compare({}, oldDoc), user: user}}});
+  };
+
   var addTg = function(name) {
     process.nextTick(function() {
       queue.removeAllListeners('insert:'+ids[name]);
       queue.removeAllListeners('update:'+ids[name]);
       queue.removeAllListeners('delete:'+ids[name]);
+      var insFn = [];
+      var updFn = [];
+      var delFn = [];
       try {
         var schTg = require('./'+name);
         var triggers = schTg(queue, ids, wrapper);
         for(var iud in triggers) {
           if(triggers[iud] instanceof Array) {
-            triggers[iud].forEach(function(fn) {
-              if(fn instanceof Function) {
-                if(iud.toLowerCase().indexOf("i")!== -1) queue.on('insert:'+ids[name], fn);
-                if(iud.toLowerCase().indexOf("u")!== -1) queue.on('update:'+ids[name], fn);
-                if(iud.toLowerCase().indexOf("d")!== -1) queue.on('delete:'+ids[name], fn);
-              }
+            var tg = triggers[iud].filter(function(fn) {
+              return fn instanceof Function;
             });
+            if(iud.toLowerCase().indexOf("i")!== -1) insFn = insFn.concat(tg);
+            if(iud.toLowerCase().indexOf("u")!== -1) updFn = updFn.concat(tg);
+            if(iud.toLowerCase().indexOf("d")!== -1) delFn = delFn.concat(tg);
           } else if(triggers[iud] instanceof Function) {
-            if(iud.toLowerCase().indexOf("i")!== -1) queue.on('insert:'+ids[name], triggers[iud]);
-            if(iud.toLowerCase().indexOf("u")!== -1) queue.on('update:'+ids[name], triggers[iud]);
-            if(iud.toLowerCase().indexOf("d")!== -1) queue.on('delete:'+ids[name], triggers[iud]);
+            if(iud.toLowerCase().indexOf("i")!== -1) insFn.push(triggers[iud]);
+            if(iud.toLowerCase().indexOf("u")!== -1) updFn.push(triggers[iud]);
+            if(iud.toLowerCase().indexOf("d")!== -1) delFn.push(triggers[iud]);
           }
         }
-        queue.on('insert:'+ids[name], function(newDoc, oldDoc) {
-          var verDoc = {
-            doc: newDoc._id,
-            type: 'document',
-            versions: {}
-          };
-          vc.insert(verDoc);
-        });
-        queue.on('update:'+ids[name], function(newDoc, oldDoc) {
-          var ptw = {};
-          ptw[Date.now()] = jsonpatch.compare(newDoc, oldDoc);
-          vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
-        });
-        queue.on('delete:'+ids[name], function(newDoc, oldDoc) {
-          var ptw = {};
-          ptw[Date.now()] = jsonpatch.compare({}, oldDoc);
-          vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
-        });
       } catch(e){}
+      insFn.push(function(newDoc, oldDoc, user) {
+        versionIns('document', newDoc, oldDoc, user);
+      });
+      updFn.push(versionUpd);
+      delFn.push(versionDel);
+      queue.on('insert:'+ids[name], function(doc) {
+        insFn.forEach(function(fn) {
+          fn(doc);
+        });
+      });
+      queue.on('update:'+ids[name], function(doc, old) {
+        updFn.forEach(function(fn) {
+          fn(doc, old);
+        });
+      });
+      queue.on('delete:'+ids[name], function(doc, old) {
+        updFn.forEach(function(fn) {
+          fn(null, old);
+        });
+      });
     });
   };
 
@@ -193,25 +231,12 @@ module.exports = function(db, queue, evtu) {
     });
   };
 
-  queue.on('insert:schema', readSch);
-  queue.on('insert:schema', function(newDoc, oldDoc) {
-    var verDoc = {
-      doc: newDoc._id,
-      type: 'schema',
-      versions: {}
-    };
-    vc.insert(verDoc);
+  queue.on('insert:schema', function(newDoc, oldDoc, user) {
+    readSch();
+    versionIns('schema', newDoc, oldDoc, user);
   });
-  queue.on('update:schema', function(newDoc, oldDoc) {
-    var ptw = {};
-    ptw[Date.now()] = jsonpatch.compare(newDoc, oldDoc);
-    vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
-  });
-  queue.on('delete:schema', function(newDoc, oldDoc) {
-    var ptw = {};
-    ptw[Date.now()] = jsonpatch.compare({}, oldDoc);
-    vc.findOneAndUpdate({doc: oldDoc._id}, {$set: {versions: ptw}});
-  });
+  queue.on('update:schema', versionUpd);
+  queue.on('delete:schema', versionDel);
 
   fs.watch(__dirname, readSch);
 

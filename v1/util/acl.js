@@ -291,12 +291,24 @@ module.exports = function(ids, dc, sc) {
     };
   };
 
+  var versionUser = function(req) {
+    return groups(req)
+    .then(function() {
+      if(req.user) return {type: 'user', root: req.root, name: req.user.objName, id: req.user._id};
+      if(req.gid) return {type: 'group', groups: req.gid};
+      if(req.system) return {type: 'system'};
+      if(req.root) return {type: 'root'};
+      return {};
+    });
+  };
+
   return {
     groups: groups,
     propertiesFilter: propertiesFilter,
     readFilter: readFilter,
     access: access,
     schemaImplementable: schemaImplementable,
-    schemaAccess: schemaAccess
+    schemaAccess: schemaAccess,
+    versionUser: versionUser
   };
 };

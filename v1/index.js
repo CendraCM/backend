@@ -76,7 +76,7 @@ module.exports = function() {
     }).then(function(ids) {
       schu = require('./util/schema')(ids, dc, sc);
       aclu = require('./util/acl')(ids, dc, sc);
-      evtu = require('./util/event')(bqueue, aclu);
+      evtu = require('./util/event')(bqueue, aclu, dc, ids);
       require('./triggers')(db, wqueue, evtu);
       return ids;
     }).then(function(ids) {
@@ -139,10 +139,13 @@ module.exports = function() {
           return schu.validate(req.body);
         })
         .then(function() {
+          return aclu.versionUser();
+        })
+        .then(function(vuser) {
           sc.insertOne(req.body)
           .then(function(inserted) {
             var doc = inserted.ops[0];
-            wqueue.emit('insert:schema', doc);
+            wqueue.emit('insert:schema', doc, null, vuser);
             evtu.emitGroupEvent('insert:schema', doc);
             res.send(doc);
           })
@@ -197,17 +200,22 @@ module.exports = function() {
         //var old = null;
         aclu.groups(req)
         .then(function() {
-          return new Promise(function(resolve, reject) {
-            sc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, sch) {
-              if(err) return reject(err);
-              resolve(sch);
-            });
-          });
+          return Promise.all([
+            new Promise(function(resolve, reject) {
+              sc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, sch) {
+                if(err) return reject(err);
+                resolve(sch);
+              });
+            }),
+            aclu.versionUser()
+          ]);
         })
-        .then(function(old) {
+        .then(function(r) {
+          var old = r[0];
+          var vuser = r[1];
           sc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
           .then(function(updated) {
-            wqueue.emit("update:schema", updated.value, old);
+            wqueue.emit("update:schema", updated.value, old, vuser);
             evtu.emitGroupEvent('update:schema', updated.value, old);
             res.send(updated.value);
           })
@@ -224,11 +232,14 @@ module.exports = function() {
         dc.find({"objInterface": req.params.id}).limit(1).next(function(err, sch) {
           if(err) return res.status(500).send(err);
           if(sch) return res.status(400).send("Interface used by other document");
-          sc.findOneAndDelete({"_id": new oid(req.params.id)})
-          .then(function(deleted) {
-            wqueue.emit("delete:schema", null, deleted.value);
-            evtu.emitGroupEvent('delete:schema', null, deleted.value);
-            res.status(204).send();
+          aclu.versionUser()
+          .then(function(vuser) {
+            return sc.findOneAndDelete({"_id": new oid(req.params.id)})
+            .then(function(deleted) {
+              wqueue.emit("delete:schema", null, deleted.value, vuser);
+              evtu.emitGroupEvent('delete:schema', null, deleted.value);
+              res.status(204).send();
+            });
           })
           .catch(function(err) {
             res.status(500).send(err);
