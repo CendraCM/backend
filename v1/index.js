@@ -139,7 +139,7 @@ module.exports = function() {
           return schu.validate(req.body);
         })
         .then(function() {
-          return aclu.versionUser();
+          return aclu.versionUser(req);
         })
         .then(function(vuser) {
           sc.insertOne(req.body)
@@ -207,7 +207,7 @@ module.exports = function() {
                 resolve(sch);
               });
             }),
-            aclu.versionUser()
+            aclu.versionUser(req)
           ]);
         })
         .then(function(r) {
@@ -232,7 +232,7 @@ module.exports = function() {
         dc.find({"objInterface": req.params.id}).limit(1).next(function(err, sch) {
           if(err) return res.status(500).send(err);
           if(sch) return res.status(400).send("Interface used by other document");
-          aclu.versionUser()
+          aclu.versionUser(req)
           .then(function(vuser) {
             return sc.findOneAndDelete({"_id": new oid(req.params.id)})
             .then(function(deleted) {
@@ -278,10 +278,13 @@ module.exports = function() {
         req.body.objSecurity.owner = req.pgid;
         schu.validate(req.body)
         .then(function() {
+          return aclu.versionUser(req);
+        })
+        .then(function(vuser) {
           dc.insertOne(req.body)
           .then(function(inserted) {
             if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
-              wqueue.emit("insert:"+iface, inserted.ops[0]);
+              wqueue.emit("insert:"+iface, inserted.ops[0], null, vuser);
             });
             evtu.emitGroupEvent('insert:document', inserted.ops[0]);
             res.send(inserted.ops[0]);
@@ -343,6 +346,33 @@ module.exports = function() {
         });
       });
 
+      version.get('/:id/version', aclu.readFilter, function(req, res, next) {
+        dc.find(extend({"_id": new oid(req.params.id)}, req.filter)).limit(1).next(function(err, doc) {
+          if(err) return res.status(500).send(err);
+          if(!doc) return res.status(404).send('Document Not Found');
+          vc.find({doc: req.params.id, type: 'document'}).limit(1).next(function(err, hist) {
+            if(err) return res.status(500).send(err);
+            res.json(hist.versions);
+          });
+        });
+      });
+
+      version.get('/:id/version/:to', aclu.readFilter, function(req, res, next) {
+        dc.find(extend({"_id": new oid(req.params.id)}, req.filter)).limit(1).next(function(err, doc) {
+          if(err) return res.status(500).send(err);
+          if(!doc) return res.status(404).send('Document Not Found');
+          vc.find({doc: req.params.id, type: 'document'}).limit(1).next(function(err, hist) {
+            var patches = [];
+            for(var i = hist.versions.length -1; i > req.params.to; i--) {
+              patches.concat(hist.versions[i].bk||[]);
+            }
+            jsonpatch.apply(doc, patches);
+            if(err) return res.status(500).send(err);
+            res.json(doc);
+          });
+        });
+      });
+
       version.patch('/:id', aclu.schemaAccess(['body', 'objInterface'], true), aclu.access(['params', 'id'], 'update', ['body']), function(req, res, next) {
         /**
         * Now in req.body we expect a JSON Patch
@@ -362,10 +392,13 @@ module.exports = function() {
             return schu.validate(u.value);
           })
           .then(function() {
+            return aclu.versionUser(req);
+          })
+          .then(function(vuser) {
             dc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
             .then(function(updated) {
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-                wqueue.emit("update:"+iface, updated.value, old);
+                wqueue.emit("update:"+iface, updated.value, old, vuser);
               });
               evtu.emitGroupEvent('update:document', updated.value, old);
               res.send(updated.value);
@@ -383,8 +416,11 @@ module.exports = function() {
       version.delete('/:id', aclu.access(['params', 'id'], 'delete'), function(req, res, next) {
         dc.findOneAndDelete({"_id": new oid(req.params.id)})
         .then(function(deleted) {
-          if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
-            wqueue.emit("delete:"+iface, null, deleted.value);
+          aclu.versionUser(req)
+          .then(function(vuser) {
+            if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
+              wqueue.emit("delete:"+iface, null, deleted.value, vuser);
+            });
           });
           evtu.emitGroupEvent('delete:document', null, deleted.value);
           res.status(204).send();
@@ -408,10 +444,13 @@ module.exports = function() {
             if(err) return res.status(500).send(err);
             schu.validate(req.body)
             .then(function() {
+              return aclu.versionUser(req);
+            })
+            .then(function(vuser) {
               dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
               .then(function(updated) {
                 if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
-                  wqueue.emit("update:"+iface, updated.value, old);
+                  wqueue.emit("update:"+iface, updated.value, old, vuser);
                 });
                 evtu.emitGroupEvent('update:document', updated.value, old);
                 res.send(updated.value);
@@ -449,8 +488,11 @@ module.exports = function() {
                 path: url.resolve('/api/v1/binary/', fileName),
                 internal: true})
               .then(function(inserted) {
+                aclu.versionUser(req)
+                .then(function(vuser) {
+                  wqueue.emit("insert:"+ids.BinaryInterface, inserted.ops[0], vuser);
+                });
                 res.send(inserted.ops[0]);
-                wqueue.emit("insert:"+ids.BinaryInterface, inserted.ops[0]);
               })
               .catch(function(err) {
                 res.status(400).send(err);

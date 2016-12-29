@@ -25,7 +25,8 @@ module.exports = function(ids, dc, sc) {
       req.root = req.root||false;
       req.gid=req.gid||[];
       req.pgid = req.pgid||[];
-      if(!req.gid.length && req.groups && req.groups.length) {
+      req.groups=req.groups||[];
+      if(!req.gid.length && req.groups.length) {
         req.groups.forEach(function(instance) {
           if(!req.root) req.root=instance.group.rootGroup;
           if(!req.system) req.system=instance.group.systemGroup;
@@ -33,7 +34,6 @@ module.exports = function(ids, dc, sc) {
           if(instance.group.personalGroup) req.pgid.push(instance._id.toString());
         });
       }
-      if(!req.groups) req.groups=[];
       return Promise.resolve();
     });
   };
@@ -295,7 +295,8 @@ module.exports = function(ids, dc, sc) {
     return groups(req)
     .then(function() {
       if(req.user) return {type: 'user', root: req.root, name: req.user.objName, id: req.user._id};
-      if(req.gid) return {type: 'group', groups: req.gid};
+      if(req.pgid && req.pgid.length) return {type: 'group', groups: req.pgid};
+      if(req.gid && req.gid.length) return {type: 'group', groups: req.gid};
       if(req.system) return {type: 'system'};
       if(req.root) return {type: 'root'};
       return {};

@@ -159,17 +159,41 @@ module.exports = function(db, queue, evtu) {
       doc: newDoc._id,
       type: type,
       objName: newDoc.objName,
-      versions: [{type: 'create', time: Date.now(), fw: jsonpatch.compare({}, newDoc), user: user}]
+      versions: [{
+        type: 'create',
+        time: Date.now(),
+        fw: jsonpatch.compare({}, newDoc),
+        user: user
+      }]
     };
     vc.insert(verDoc);
   };
 
   var versionUpd = function(newDoc, oldDoc, user) {
-    vc.findOneAndUpdate({doc: oldDoc._id}, {$push: {versions: {type: 'modify', time: Date.now(), bck: jsonpatch.compare(newDoc, oldDoc), fw: jsonpatch.compare(oldDoc, newDoc), user: user}}});
+    vc.findOneAndUpdate({doc: oldDoc._id}, {
+      $push: {
+        versions: {
+          type: 'modify',
+          time: Date.now(),
+          bck: jsonpatch.compare(newDoc, oldDoc),
+          fw: jsonpatch.compare(oldDoc, newDoc),
+          user: user
+        }
+      }
+    });
   };
 
   var versionDel = function(newDoc, oldDoc, user) {
-    vc.findOneAndUpdate({doc: oldDoc._id}, {$push: {versions: {type: 'remove', time: Date.now(), bck: jsonpatch.compare({}, oldDoc), user: user}}});
+    vc.findOneAndUpdate({doc: oldDoc._id}, {
+      $push: {
+        versions: {
+          type: 'remove',
+          time: Date.now(),
+          bck: jsonpatch.compare({}, oldDoc),
+          user: user
+        }
+      }
+    });
   };
 
   var addTg = function(name) {
@@ -203,19 +227,19 @@ module.exports = function(db, queue, evtu) {
       });
       updFn.push(versionUpd);
       delFn.push(versionDel);
-      queue.on('insert:'+ids[name], function(doc) {
+      queue.on('insert:'+ids[name], function(doc, old, user) {
         insFn.forEach(function(fn) {
-          fn(doc);
+          fn(doc, null, user);
         });
       });
-      queue.on('update:'+ids[name], function(doc, old) {
+      queue.on('update:'+ids[name], function(doc, old, user) {
         updFn.forEach(function(fn) {
-          fn(doc, old);
+          fn(doc, old, user);
         });
       });
-      queue.on('delete:'+ids[name], function(doc, old) {
+      queue.on('delete:'+ids[name], function(doc, old, user) {
         updFn.forEach(function(fn) {
-          fn(null, old);
+          fn(null, old, user);
         });
       });
     });
