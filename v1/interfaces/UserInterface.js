@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'UserInterface',
+  objIcon: 'person',
   objSecurity: {
     inmutable: true,
     implementable: ['system'],

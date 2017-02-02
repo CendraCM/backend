@@ -283,6 +283,7 @@ module.exports = function() {
         .then(function(vuser) {
           dc.insertOne(req.body)
           .then(function(inserted) {
+            wqueue.emit("insert:document", inserted.ops[0], null, vuser);
             if(req.body.objInterface) req.body.objInterface.forEach(function(iface) {
               wqueue.emit("insert:"+iface, inserted.ops[0], null, vuser);
             });
@@ -352,7 +353,7 @@ module.exports = function() {
           if(!doc) return res.status(404).send('Document Not Found');
           vc.find({doc: req.params.id, type: 'document'}).limit(1).next(function(err, hist) {
             if(err) return res.status(500).send(err);
-            res.json(hist.versions);
+            res.json((hist||{}).versions);
           });
         });
       });
@@ -385,6 +386,8 @@ module.exports = function() {
           delete doc._id;
           tc.insertOne(doc)
           .then(function(i) {
+            console.log(req.body);
+            console.log(toMongodb(req.body));
             return tc.findOneAndUpdate({"_id": i.insertedId}, toMongodb(req.body), {returnOriginal: false});
           })
           .then(function(u) {
@@ -397,6 +400,7 @@ module.exports = function() {
           .then(function(vuser) {
             dc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
             .then(function(updated) {
+              wqueue.emit("update:document", updated.value, old, vuser);
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                 wqueue.emit("update:"+iface, updated.value, old, vuser);
               });
@@ -404,10 +408,12 @@ module.exports = function() {
               res.send(updated.value);
             })
             .catch(function(err) {
+              console.log(err);
               res.status(500).send(err);
             });
           })
           .catch(function(err) {
+            console.log(err);
             res.status(400).send(err);
           });
         });
@@ -418,6 +424,7 @@ module.exports = function() {
         .then(function(deleted) {
           aclu.versionUser(req)
           .then(function(vuser) {
+            wqueue.emit("delete:document", null, deleted.value, vuser);
             if(deleted.value.objInterface) deleted.value.objInterface.forEach(function(iface) {
               wqueue.emit("delete:"+iface, null, deleted.value, vuser);
             });
@@ -449,6 +456,7 @@ module.exports = function() {
             .then(function(vuser) {
               dc.findOneAndUpdate({"_id": new oid(req.params.id)}, req.body, {returnOriginal: false})
               .then(function(updated) {
+                wqueue.emit("update:document", updated.value, old, vuser);
                 if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
                   wqueue.emit("update:"+iface, updated.value, old, vuser);
                 });
@@ -490,7 +498,8 @@ module.exports = function() {
               .then(function(inserted) {
                 aclu.versionUser(req)
                 .then(function(vuser) {
-                  wqueue.emit("insert:"+ids.BinaryInterface, inserted.ops[0], vuser);
+                  wqueue.emit("insert:document", inserted.ops[0], null, vuser);
+                  wqueue.emit("insert:"+ids.BinaryInterface, inserted.ops[0], null, vuser);
                 });
                 res.send(inserted.ops[0]);
               })

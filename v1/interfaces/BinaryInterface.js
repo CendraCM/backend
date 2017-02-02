@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'BinaryInterface',
+  objIcon: 'video_library',
   objSecurity: {
     inmutable: true,
     implementable: ['any'],

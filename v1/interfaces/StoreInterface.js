@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'StoreInterface',
+  objIcon: 'cloud',
   objSecurity: {
     inmutable: true,
     implementable: ['any'],

@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'ContentInterface',
+  objIcon: 'archive',
   objSecurity: {
     inmutable: true,
     implementable: ['any'],

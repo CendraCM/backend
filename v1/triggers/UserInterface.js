@@ -3,7 +3,7 @@ module.exports = function(emitter, ids, dc) {
   return {
     i: function(doc){
       dc.tg.insertOne({
-        objName: doc.objName+' Personal Group',
+        objName: doc.objName,
         objInterface: [ids.GroupInterface.toString()],
         objSecurity: {
           inmutable: false
@@ -18,7 +18,7 @@ module.exports = function(emitter, ids, dc) {
         gobj.objSecurity.owner = [group.insertedId.toString()];
         dc.updateOne({_id: group.insertedId}, gobj);
         return dc.tg.insertOne({
-          objName: 'Home',
+          objName: 'Documentos',
           objInterface: [ids.FolderInterface.toString()],
           objSecurity: {
             inmutable: false,

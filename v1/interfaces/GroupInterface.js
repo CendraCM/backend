@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'GroupInterface',
+  objIcon: 'people',
   objSecurity: {
     inmutable: true,
     implementable: ['any'],

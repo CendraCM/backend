@@ -222,11 +222,6 @@ module.exports = function(db, queue, evtu) {
           }
         }
       } catch(e){}
-      insFn.push(function(newDoc, oldDoc, user) {
-        versionIns('document', newDoc, oldDoc, user);
-      });
-      updFn.push(versionUpd);
-      delFn.push(versionDel);
       queue.on('insert:'+ids[name], function(doc, old, user) {
         insFn.forEach(function(fn) {
           fn(doc, null, user);
@@ -261,6 +256,11 @@ module.exports = function(db, queue, evtu) {
   });
   queue.on('update:schema', versionUpd);
   queue.on('delete:schema', versionDel);
+  queue.on('insert:document', function(newDoc, oldDoc, user) {
+    versionIns('document', newDoc, oldDoc, user);
+  });
+  queue.on('update:document', versionUpd);
+  queue.on('delete:document', versionDel);
 
   fs.watch(__dirname, readSch);
 

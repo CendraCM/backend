@@ -1,6 +1,7 @@
 module.exports = {
   type: 'object',
   objName: 'FolderInterface',
+  objIcon: 'folder',
   objSecurity: {
     inmutable: true,
     implementable: ['any'],
