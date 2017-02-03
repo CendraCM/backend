@@ -11,7 +11,7 @@ var crypto = require('crypto');
 var util = require('util');
 var moment = require('moment');
 var jsonpatch = require('fast-json-patch');
-var toMongodb = require('jsonpatch-to-mongodb');
+//var toMongodb = require('jsonpatch-to-mongodb');
 
 if(process.env.NODE_ENV == 'ci-testing') {
   mongoUrl += '-ci-testing';
@@ -383,22 +383,13 @@ module.exports = function() {
         var old = null;
         dc.find({"_id": new oid(req.params.id)}).limit(1).next(function(err, doc) {
           old = extend({}, doc);
-          delete doc._id;
-          tc.insertOne(doc)
-          .then(function(i) {
-            console.log(req.body);
-            console.log(toMongodb(req.body));
-            return tc.findOneAndUpdate({"_id": i.insertedId}, toMongodb(req.body), {returnOriginal: false});
-          })
-          .then(function(u) {
-            tc.deleteOne({"_id": u.value._id});
-            return schu.validate(u.value);
-          })
+          jsonpatch.apply(doc, req.body);
+          schu.validate(doc)
           .then(function() {
             return aclu.versionUser(req);
           })
           .then(function(vuser) {
-            dc.findOneAndUpdate({"_id": new oid(req.params.id)}, toMongodb(req.body), {returnOriginal: false})
+            dc.findOneAndReplace({"_id": new oid(req.params.id)}, doc, {returnOriginal: false})
             .then(function(updated) {
               wqueue.emit("update:document", updated.value, old, vuser);
               if(updated.value.objInterface) updated.value.objInterface.forEach(function(iface) {
