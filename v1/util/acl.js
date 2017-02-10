@@ -116,19 +116,22 @@ module.exports = function(ids, dc, sc) {
 
   var schemaImplementable = function(req, schs) {
     return Promise.all(schs.map(function(sch) {
+      var impFlag = sch.objSecurity && sch.objSecurity.implementable;
       return new Promise(function(resolve, reject) {
-        if(sch.objSecurity.implementable.includes('none')) return reject({status: 403, msg: "Access Forbiden"});
+        if(impFlag && sch.objSecurity.implementable.includes('none')) return reject({status: 403, msg: "Access Forbiden"});
         if(req.root) return resolve();
-        if(sch.objSecurity.implementable.includes('any')) return resolve();
-        if(sch.objSecurity.implementable.includes('system') && req.system) return resolve();
+        if(impFlag && sch.objSecurity.implementable.includes('any')) return resolve();
+        if(impFlag && sch.objSecurity.implementable.includes('system') && req.system) return resolve();
         var intersectedOwners = (sch.objSecurity.owner||[]).filter(function(owner) {
           return req.gid.includes(owner);
         });
         if(intersectedOwners.length) return resolve();
-        var intersectedAllowed = sch.objSecurity.implementable.filter(function(allowed) {
-          return req.gid.allowed;
-        });
-        if(intersectedAllowed.length) return resolve();
+        if(impFlag) {
+          var intersectedAllowed = sch.objSecurity.implementable.filter(function(allowed) {
+            return req.gid.allowed;
+          });
+          if(intersectedAllowed.length) return resolve();
+        }
         return reject({status: 403, msg: "Access Forbiden"});
       });
     }));
